@@ -1,0 +1,494 @@
+/*
+ * Optimized Authentication CSS
+ * Applying Vercel React best practices for performance
+ */
+
+/* ==================== PERFORMANCE OPTIMIZATIONS ==================== */
+
+/* CSS Containment for better performance */
+.auth-container,
+.login-container,
+.registration-container,
+.form-container {
+  contain: layout style paint;
+}
+
+/* Use will-change for animations */
+.cyber-grid-bg,
+.auth-button,
+.password-strength-bar,
+.loading-spinner {
+  will-change: transform, opacity;
+}
+
+/* Optimize images and media */
+img {
+  content-visibility: auto;
+}
+
+/* Use content-visibility for off-screen content */
+.offscreen-content {
+  content-visibility: hidden;
+}
+
+/* ==================== CSS CUSTOM PROPERTIES ==================== */
+
+:root {
+  /* Color palette */
+  --accent: #00ff9f;
+  --accent-hover: #00bc7d;
+  --accent-light: rgba(0, 255, 159, 0.1);
+  --accent-border: rgba(0, 255, 159, 0.2);
+  --accent-shadow: rgba(0, 255, 159, 0.4);
+  
+  --error: #ff4444;
+  --warning: #ffaa00;
+  --success: #00ff9f;
+  --info: #00d4ff;
+  
+  --bg-dark: #050a14;
+  --bg-card: rgba(10, 14, 26, 0.6);
+  --bg-glass: rgba(10, 14, 26, 0.8);
+  
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #666;
+  
+  /* Animation durations */
+  --transition-fast: 0.2s;
+  --transition-normal: 0.3s;
+  --transition-slow: 0.5s;
+  
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/* ==================== BASE STYLES ==================== */
+
+/* Hide Streamlit default elements */
+#MainMenu,
+footer,
+header {
+  visibility: hidden;
+}
+
+/* Body optimization */
+.stApp {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+}
+
+/* ==================== LAYOUT ==================== */
+
+/* Flexbox utilities */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-sm {
+  gap: var(--space-sm);
+}
+
+.gap-md {
+  gap: var(--space-md);
+}
+
+.gap-lg {
+  gap: var(--space-lg);
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+/* Optimized keyframes */
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    text-shadow: 0 0 10px var(--accent-shadow);
+  }
+  50% {
+    text-shadow: 0 0 20px var(--accent-shadow), 0 0 30px var(--accent-shadow);
+  }
+}
+
+/* Use transform for better performance */
+.animate-scale-in {
+  animation: scale-in var(--transition-slow) ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up var(--transition-slow) ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ==================== BACKGROUND ==================== */
+
+.cyber-grid-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg-dark);
+  background-image: 
+    linear-gradient(var(--accent-light) 1px, transparent 1px),
+    linear-gradient(90deg, var(--accent-light) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: -1;
+  transform: perspective(500px) rotateX(20deg);
+  will-change: transform;
+}
+
+.cyber-grid-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at center, transparent 0%, var(--bg-dark) 90%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* ==================== CARDS ==================== */
+
+.cyber-card {
+  animation: scale-in var(--transition-slow) ease-out;
+  transition: all var(--transition-normal) ease;
+}
+
+.cyber-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 30px var(--accent-light);
+}
+
+.glass {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-xl);
+}
+
+.glass-elevated {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 255, 159, 0.15);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ==================== FORM ELEMENTS ==================== */
+
+/* Optimized input styling */
+.stTextInput input,
+.stSelectbox > div > div {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--accent-border) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-primary) !important;
+  padding: 12px 16px !important;
+  font-size: 14px !important;
+  transition: border-color var(--transition-normal) ease, 
+              box-shadow var(--transition-normal) ease;
+}
+
+.stTextInput input:focus,
+.stSelectbox > div > div:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 10px var(--accent-shadow) !important;
+  outline: none !important;
+}
+
+.stTextInput input::placeholder {
+  color: var(--text-secondary) !important;
+}
+
+.stTextInput label {
+  color: var(--accent) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1px !important;
+  text-transform: uppercase !important;
+}
+
+/* Checkbox optimization */
+.stCheckbox label {
+  color: var(--text-secondary) !important;
+}
+
+.stCheckbox input:checked + label {
+  color: var(--accent) !important;
+}
+
+/* ==================== BUTTONS ==================== */
+
+.stButton button {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%) !important;
+  color: var(--bg-dark) !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  letter-spacing: 1px !important;
+  text-transform: uppercase !important;
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  padding: 14px 24px !important;
+  transition: transform var(--transition-normal) ease, 
+              box-shadow var(--transition-normal) ease;
+  will-change: transform, box-shadow;
+  cursor: pointer !important;
+}
+
+.stButton button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px var(--accent-shadow) !important;
+}
+
+.stButton button:active {
+  transform: translateY(0) !important;
+}
+
+/* Secondary button */
+.stButton button[kind="secondary"] {
+  background: transparent !important;
+  border: 1px solid var(--accent-border) !important;
+  color: var(--text-primary) !important;
+}
+
+.stButton button[kind="secondary"]:hover {
+  background: var(--accent-light) !important;
+  border-color: var(--accent) !important;
+}
+
+/* ==================== PASSWORD STRENGTH ==================== */
+
+.password-strength-meter {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--space-sm);
+}
+
+.password-strength-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background var(--transition-normal) ease;
+}
+
+.password-strength-bar.active.weak {
+  background: var(--error);
+}
+
+.password-strength-bar.active.medium {
+  background: var(--warning);
+}
+
+.password-strength-bar.active.strong {
+  background: var(--success);
+}
+
+/* ==================== MESSAGES ==================== */
+
+/* Optimized message styling */
+.stSuccess,
+.stError,
+.stWarning,
+.stInfo {
+  border-radius: var(--radius-md) !important;
+  padding: 12px 16px !important;
+  margin: var(--space-md) 0 !important;
+}
+
+.stSuccess {
+  background: var(--accent-light) !important;
+  border: 1px solid var(--accent-border) !important;
+  color: var(--success) !important;
+}
+
+.stError {
+  background: rgba(255, 68, 68, 0.1) !important;
+  border: 1px solid rgba(255, 68, 68, 0.3) !important;
+  color: var(--error) !important;
+}
+
+.stWarning {
+  background: rgba(255, 170, 0, 0.1) !important;
+  border: 1px solid rgba(255, 170, 0, 0.3) !important;
+  color: var(--warning) !important;
+}
+
+.stInfo {
+  background: rgba(0, 212, 255, 0.1) !important;
+  border: 1px solid rgba(0, 212, 255, 0.3) !important;
+  color: var(--info) !important;
+}
+
+/* ==================== LOADING STATES ==================== */
+
+.loading-spinner {
+  content-visibility: hidden;
+}
+
+.loading-spinner.active {
+  content-visibility: visible;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .cyber-card {
+    padding: var(--space-md) !important;
+  }
+  
+  .stButton button {
+    padding: 12px 16px !important;
+    font-size: 12px !important;
+  }
+  
+  .stTextInput input {
+    padding: 10px 12px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* ==================== ACCESSIBILITY ==================== */
+
+/* Focus indicators */
+.stTextInput input:focus,
+.stButton button:focus,
+.stCheckbox input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --accent-border: #00ff9f;
+    --text-secondary: #ffffff;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==================== UTILITY CLASSES ==================== */
+
+.text-accent {
+  color: var(--accent);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.bg-glass {
+  background: var(--bg-card);
+}
+
+.border-accent {
+  border-color: var(--accent);
+}
+
+.rounded-md {
+  border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+  border-radius: var(--radius-lg);
+}
+
+.shadow-glow {
+  box-shadow: 0 0 20px var(--accent-shadow);
+}
+
+/* ==================== PERFORMANCE CRITICAL ==================== */
+
+/* Use contain for complex components */
+.auth-form {
+  contain: layout style paint;
+}
+
+/* Optimize font loading */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+.font-display {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Lazy load non-critical images */
+.lazy-image {
+  content-visibility: auto;
+  contain-intrinsic-size: 100px 100px;
+}

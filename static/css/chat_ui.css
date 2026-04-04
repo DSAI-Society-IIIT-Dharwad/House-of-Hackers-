@@ -1,0 +1,259 @@
+/* 
+ * DECEPTICON - Enhanced Chat UI Styles
+ * Phase 4: Chat Interface Redesign
+ */
+
+/* -------------------------------------------------------------------------- */
+/*                               Animations                                   */
+/* -------------------------------------------------------------------------- */
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse-glow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(0, 255, 159, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(0, 255, 159, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 255, 159, 0);
+    }
+}
+
+@keyframes typingBounce {
+
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+    }
+
+    30% {
+        transform: translateY(-6px);
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              Message Containers                            */
+/* -------------------------------------------------------------------------- */
+
+/* Target the main chat message container */
+div.stChatMessage[data-testid="stChatMessage"] {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background-color: transparent;
+    margin-bottom: 1rem;
+    animation: slideInLeft 0.4s ease-out forwards;
+    border: 1px solid transparent;
+}
+
+/* User Message Specifics */
+div.stChatMessage[data-testid="stChatMessage"]:has(div[data-testid="stMarkdownContainer"] > div:contains("user")) {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* AI Message Styling - Glassmorphism */
+div.stChatMessage[data-testid="stChatMessage"] {
+    background: rgba(10, 14, 26, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 255, 159, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+div.stChatMessage[data-testid="stChatMessage"]:hover {
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    border-color: rgba(0, 255, 159, 0.3);
+    transform: translateY(-2px);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Avatars                                     */
+/* -------------------------------------------------------------------------- */
+
+div.stChatMessage[data-testid="stChatMessage"] .stChatMessageAvatar {
+    background-color: #0f1419;
+    border: 2px solid rgba(0, 255, 159, 0.3);
+    border-radius: 50%;
+    padding: 2px;
+    box-shadow: 0 0 10px rgba(0, 255, 159, 0.2);
+    transition: all 0.3s ease;
+}
+
+div.stChatMessage[data-testid="stChatMessage"]:hover .stChatMessageAvatar {
+    box-shadow: 0 0 15px rgba(0, 255, 159, 0.5);
+    border-color: #00ff9f;
+    transform: scale(1.1);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Headers & Text                               */
+/* -------------------------------------------------------------------------- */
+
+.agent-header {
+    font-family: 'Rajdhani', 'sans-serif';
+    font-size: 1.1rem !important;
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agent-header strong {
+    text-shadow: 0 0 10px rgba(0, 255, 159, 0.5);
+}
+
+/* User Text */
+div[data-testid="stMarkdownContainer"] p {
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                            Agent Specific Borders                          */
+/* -------------------------------------------------------------------------- */
+
+/* Map legacy classes to new variables */
+.supervisor-message-container {
+    border-left: 3px solid #ff006e !important;
+}
+
+/* Danger/Red */
+.planner-message-container {
+    border-left: 3px solid #00ff9f !important;
+}
+
+/* Matrix Green */
+.recon-message-container {
+    border-left: 3px solid #7950f2 !important;
+}
+
+/* Purple */
+.initaccess-message-container {
+    border-left: 3px solid #ffbe0b !important;
+}
+
+/* Yellow */
+.execution-message-container {
+    border-left: 3px solid #f76707 !important;
+}
+
+/* Orange */
+.persistence-message-container {
+    border-left: 3px solid #ae3ec9 !important;
+}
+
+/* Pink-Purple */
+.privilege-escalation-message-container {
+    border-left: 3px solid #d6336c !important;
+}
+
+/* Pink-Red */
+.defense-evasion-message-container {
+    border-left: 3px solid #1098ad !important;
+}
+
+/* Cyan */
+.tool-message-container {
+    border-left: 3px solid #82c91e !important;
+    background: rgba(130, 201, 30, 0.05) !important;
+}
+
+/* Lime */
+.agent-message-container {
+    border-left: 3px solid #9775fa !important;
+}
+
+/* Light Purple */
+
+/* -------------------------------------------------------------------------- */
+/*                              Typing & Streaming                            */
+/* -------------------------------------------------------------------------- */
+
+.typing-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #8b949e;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background: #00ff9f;
+    border-radius: 50%;
+    animation: typingBounce 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Code Blocks                                 */
+/* -------------------------------------------------------------------------- */
+
+code {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e6edf3 !important;
+    font-family: 'Fira Code', monospace !important;
+}
+
+pre {
+    background: #0d1117 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 8px !important;
+}
+
+/* Styled Scrollbars for Code Blocks */
+pre::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+pre::-webkit-scrollbar-track {
+    background: #0d1117;
+}
+
+pre::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 4px;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+    background: #00ff9f;
+}

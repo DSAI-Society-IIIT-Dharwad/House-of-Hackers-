@@ -1,0 +1,50 @@
+name: k8s_attack_path_visualizer
+version: 1.1.0
+description: Kubernetes Attack Path Visualizer for Decepticon. Builds a weighted attack graph from mock or live cluster data, runs BFS blast radius, Dijkstra shortest path, DFS cycle detection, critical node analysis, and exports a full kill chain report PDF.
+requirements:
+  - python: ">=3.11"
+  - networkx
+  - reportlab
+mcp_registration:
+  tools:
+    - name: k8s_attack_path_visualizer
+      description: Analyze a Kubernetes attack graph and return blast radius, shortest path, cycle, critical node, or full report output.
+      examples:
+        - "analyze my kubernetes cluster for attack paths"
+        - "show me the kill chain report"
+        - "which node should I remove to reduce the most risk"
+        - "visualize the attack graph"
+        - "find shortest path from internet to kube-system"
+        - "detect circular permissions in my cluster"
+        - "what is the blast radius from web-frontend"
+        - "show me all CVE vulnerabilities in the cluster"
+      parameters:
+        type: object
+        properties:
+          mode:
+            type: string
+            enum:
+              - blast_radius
+              - shortest_path
+              - cycles
+              - critical_node
+              - full_report
+              - visualize
+            default: full_report
+          data_source:
+            type: string
+            description: "Use 'kubectl' for live mode or pass a path to a mock cluster JSON file."
+            default: skills/k8s_attack_path_visualizer/mock-cluster-graph.json
+          source:
+            type: string
+            description: Source node id for BFS blast radius or Dijkstra shortest path.
+          target:
+            type: string
+            description: Target node id for Dijkstra shortest path.
+          hops:
+            type: integer
+            description: Maximum BFS depth for blast radius analysis.
+            default: 3
+          export_pdf:
+            type: string
+            description: Output filepath for the generated PDF report.

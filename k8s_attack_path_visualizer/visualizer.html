@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kubernetes Attack Path Visualizer</title>
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --panel: rgba(14, 21, 38, 0.86);
+      --panel-strong: rgba(18, 27, 46, 0.94);
+      --line: rgba(148, 163, 184, 0.18);
+      --text: #edf2f7;
+      --muted: #9fb0cd;
+      --source: #f59e0b;
+      --sink: #ef4444;
+      --cycle: #a855f7;
+      --critical: #f97316;
+      --safe: #22c55e;
+      --cve: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Trebuchet MS", "Segoe UI", sans-serif; overflow: hidden; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 15% 15%, rgba(249,115,22,0.18), transparent 22%),
+        radial-gradient(circle at 82% 12%, rgba(168,85,247,0.14), transparent 18%),
+        radial-gradient(circle at 76% 78%, rgba(34,197,94,0.12), transparent 20%),
+        linear-gradient(rgba(148,163,184,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148,163,184,0.06) 1px, transparent 1px);
+      background-size: auto, auto, auto, 30px 30px, 30px 30px;
+      pointer-events: none;
+    }
+
+    .app { position: relative; width: 100vw; height: 100vh; }
+    .glass { background: linear-gradient(180deg, rgba(18,27,46,0.94), rgba(10,14,25,0.84)); border: 1px solid var(--line); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+    .top { position: absolute; top: 16px; left: 16px; right: 16px; z-index: 20; display: grid; gap: 14px; grid-template-columns: minmax(320px, 520px) minmax(420px, 1fr); pointer-events: none; }
+    .brand, .stats, .controls, .legend, .selected { pointer-events: auto; }
+    .brand { border-radius: 26px; padding: 18px 22px; }
+    .eyebrow { margin: 0 0 8px; color: var(--source); text-transform: uppercase; letter-spacing: 0.22em; font-size: 11px; font-weight: 700; }
+    h1 { margin: 0; font-family: "Palatino Linotype", Georgia, serif; font-size: clamp(28px, 3vw, 38px); line-height: 1.04; }
+    .brand p { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .engine-status { display: inline-flex; align-items: center; gap: 10px; margin-top: 14px; padding: 9px 13px; border-radius: 999px; border: 1px solid rgba(143, 232, 197, 0.24); background: rgba(12, 30, 24, 0.52); color: #8fe8c5; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
+    .engine-status::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: currentColor; box-shadow: 0 0 18px currentColor; }
+    .engine-status[data-tone="warn"] { border-color: rgba(251, 191, 36, 0.28); background: rgba(52, 34, 10, 0.56); color: #fbbf24; }
+    .engine-status[data-tone="alert"] { border-color: rgba(239, 68, 68, 0.26); background: rgba(49, 16, 22, 0.58); color: #fda4af; }
+    .stats { border-radius: 24px; padding: 16px; }
+    .stats .label, .panel-label { margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.16em; font-size: 10px; font-weight: 700; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 10px; }
+    .stat { border-radius: 18px; border: 1px solid rgba(148,163,184,0.14); background: rgba(255,255,255,0.03); padding: 12px 14px; min-height: 80px; }
+    .stat span { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px; }
+    .stat strong { display: block; margin-top: 8px; font-size: 24px; }
+    .stat.critical strong { font-size: 20px; color: var(--critical); }
+
+    .left-rail, .right-rail { position: absolute; top: 184px; z-index: 20; display: grid; gap: 12px; width: 300px; }
+    .left-rail { left: 16px; }
+    .right-rail { right: 16px; width: 280px; }
+    .controls, .legend, .selected { border-radius: 22px; padding: 16px; }
+    .title { margin: 0 0 8px; font-family: "Palatino Linotype", Georgia, serif; font-size: 20px; }
+    .copy { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .buttons { display: grid; gap: 10px; margin: 14px 0 12px; }
+    .filter-btn { width: 100%; padding: 12px 14px; border: 1px solid rgba(148,163,184,0.16); border-radius: 16px; background: rgba(255,255,255,0.04); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: transform .16s ease, border-color .16s ease, background .16s ease; }
+    .filter-btn:hover { transform: translateX(3px); border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
+    .filter-btn.active { border-color: rgba(245,158,11,0.54); background: linear-gradient(90deg, rgba(245,158,11,0.18), rgba(249,115,22,0.08)); }
+    .focus, .selected { background: rgba(255,255,255,0.035); }
+    .focus, .selected, .legend { border: 1px solid rgba(148,163,184,0.12); }
+    .focus { padding: 14px; border-radius: 18px; color: var(--text); font-size: 13px; line-height: 1.5; }
+    .selected dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 10px; font-size: 13px; }
+    .selected dt { color: var(--muted); }
+    .selected dd { margin: 0; text-align: right; }
+
+    .legend-grid { display: grid; gap: 10px; margin-top: 12px; }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .swatch { position: relative; width: 18px; height: 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.22); flex: 0 0 18px; }
+    .swatch.ring::after { content: ""; position: absolute; inset: -4px; border-radius: 999px; border: 2px solid rgba(239,68,68,0.78); }
+    .edge-swatch { position: relative; width: 30px; height: 10px; flex: 0 0 30px; }
+    .edge-swatch::before { content: ""; position: absolute; top: 4px; left: 0; right: 0; border-top: 2px solid var(--cve); }
+    .edge-swatch::after { content: ""; position: absolute; top: 1px; right: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid var(--cve); }
+
+    svg { width: 100%; height: 100%; display: block; cursor: grab; }
+    svg:active { cursor: grabbing; }
+    .edge { fill: none; stroke: rgba(159,176,205,0.28); stroke-width: 1.25px; transition: opacity .16s ease, stroke-width .16s ease; }
+    .edge.cve { stroke: var(--cve); }
+    .edge-label { fill: #ffd0d8; font-size: 10px; paint-order: stroke; stroke: rgba(11,15,26,0.92); stroke-width: 4px; letter-spacing: 0.03em; pointer-events: none; }
+    .node-ring { fill: none; stroke: rgba(239,68,68,0.88); stroke-width: 2px; opacity: 0; }
+    .node-ring.vuln { opacity: 1; animation: pulse 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+    .node-core { stroke: rgba(255,255,255,0.18); stroke-width: 1.5px; filter: url(#glow); }
+    .node-label { fill: var(--text); font-size: 12px; font-weight: 600; paint-order: stroke; stroke: rgba(11,15,26,0.92); stroke-width: 4px; pointer-events: none; }
+    .node-type { fill: rgba(159,176,205,0.82); font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; paint-order: stroke; stroke: rgba(11,15,26,0.92); stroke-width: 4px; pointer-events: none; }
+
+    .tooltip { position: absolute; min-width: 220px; max-width: 280px; padding: 14px 16px; border-radius: 18px; border: 1px solid rgba(245,158,11,0.26); background: linear-gradient(180deg, rgba(18,27,46,0.97), rgba(10,14,25,0.95)); box-shadow: 0 20px 60px rgba(0,0,0,0.45); font-size: 13px; line-height: 1.45; pointer-events: none; z-index: 30; }
+    .tooltip[hidden] { display: none; }
+    .tooltip h3 { margin: 0 0 8px; font-family: "Palatino Linotype", Georgia, serif; font-size: 16px; }
+    .tooltip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
+    .tooltip dt { color: var(--muted); }
+    .tooltip dd { margin: 0; text-align: right; }
+    .tooltip .cves { margin-top: 10px; color: #ffd0d8; font-size: 12px; }
+
+    @keyframes pulse { 0% { stroke-width: 2px; stroke-opacity: .9; } 50% { stroke-width: 9px; stroke-opacity: .08; } 100% { stroke-width: 2px; stroke-opacity: .9; } }
+
+    @media (max-width: 1200px) {
+      .top { grid-template-columns: 1fr; }
+      .left-rail, .right-rail { top: auto; bottom: 16px; width: min(320px, calc(50vw - 24px)); }
+      .right-rail { right: 16px; }
+    }
+
+    @media (max-width: 900px) {
+      html, body { overflow: auto; }
+      .app { min-height: 100vh; height: auto; padding-bottom: 16px; }
+      .top { position: static; grid-template-columns: 1fr; margin: 16px; }
+      .left-rail, .right-rail { position: static; width: auto; margin: 12px 16px 0; }
+      .stat-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      svg { min-height: 70vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top">
+      <section class="brand glass">
+        <p class="eyebrow">Mock Cluster Intrusion Map</p>
+        <h1>Kubernetes Attack Path Visualizer</h1>
+        <p>Force-directed attack graph for <strong>mock-prod-cluster</strong>. Drag to pin, scroll to zoom, and click any node to isolate its attack neighborhood.</p>
+        <p class="engine-status" id="engineStatus" data-tone="ok">Loading enhanced graph engine</p>
+      </section>
+      <section class="stats glass">
+        <p class="label">Rubric Snapshot</p>
+        <div class="stat-grid" id="stats"></div>
+      </section>
+    </div>
+
+    <div class="left-rail">
+      <section class="controls glass">
+        <h2 class="title">Filter Scope</h2>
+        <p class="copy">Switch between the full cluster graph, shortest attack routes, and only the explicitly CVE-tagged traversals.</p>
+        <div class="buttons">
+          <button class="filter-btn active" data-filter="all">Show All</button>
+          <button class="filter-btn" data-filter="critical">Critical Paths Only</button>
+          <button class="filter-btn" data-filter="cve">CVE Edges Only</button>
+        </div>
+        <div class="focus" id="focusCopy">Showing every node and directed relationship in the official organizer dataset.</div>
+      </section>
+
+      <section class="selected glass" id="selectedCard">
+        <h2 class="title">No node selected</h2>
+        <p class="copy">Hover for tooltip details, or click a node to highlight its inbound and outbound attack edges.</p>
+      </section>
+    </div>
+
+    <div class="right-rail">
+      <section class="legend glass">
+        <p class="panel-label">Legend</p>
+        <h2 class="title">Signal Colors</h2>
+        <p class="copy">Orange marks the high-leverage intermediates from the handoff, while red overlays highlight explicit CVE exposure.</p>
+        <div class="legend-grid">
+          <div class="legend-item"><span class="swatch" style="background:#f59e0b"></span>Source nodes</div>
+          <div class="legend-item"><span class="swatch" style="background:#ef4444"></span>Sink nodes</div>
+          <div class="legend-item"><span class="swatch" style="background:#a855f7"></span>Cycle nodes</div>
+          <div class="legend-item"><span class="swatch" style="background:#f97316"></span>Critical intermediates</div>
+          <div class="legend-item"><span class="swatch" style="background:#22c55e"></span>Safe nodes</div>
+          <div class="legend-item"><span class="swatch ring" style="background:#0b0f1a"></span>Node with CVEs</div>
+          <div class="legend-item"><span class="edge-swatch"></span>CVE edge label</div>
+        </div>
+      </section>
+    </div>
+
+    <svg id="graph" aria-label="Kubernetes attack path graph"></svg>
+    <div class="tooltip" id="tooltip" hidden></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script>
+    const GRAPH_DATA = {"metadata":{"cluster":"mock-prod-cluster","generated":"2026-04-03","node_count":40,"edge_count":58,"pre_planted_paths":6,"description":"Synthetic Kubernetes cluster for hackathon testing"},"nodes":[{"id":"internet","type":"ExternalActor","name":"internet","namespace":"external","risk_score":10.0,"is_source":true,"is_sink":false,"cves":[]},{"id":"user-dev1","type":"User","name":"dev-1","namespace":"default","risk_score":5.0,"is_source":true,"is_sink":false,"cves":[]},{"id":"user-dev2","type":"User","name":"dev-2","namespace":"default","risk_score":5.0,"is_source":true,"is_sink":false,"cves":[]},{"id":"user-cicd","type":"User","name":"cicd-bot","namespace":"ci","risk_score":6.0,"is_source":true,"is_sink":false,"cves":[]},{"id":"pod-webfront","type":"Pod","name":"web-frontend","namespace":"default","risk_score":7.5,"is_source":false,"is_sink":false,"cves":["CVE-2024-1234"]},{"id":"pod-api","type":"Pod","name":"api-server","namespace":"default","risk_score":6.0,"is_source":false,"is_sink":false,"cves":["CVE-2023-4567"]},{"id":"pod-worker","type":"Pod","name":"background-worker","namespace":"default","risk_score":4.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"pod-metrics","type":"Pod","name":"metrics-collector","namespace":"monitoring","risk_score":3.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"pod-logger","type":"Pod","name":"log-aggregator","namespace":"logging","risk_score":4.0,"is_source":false,"is_sink":false,"cves":["CVE-2024-9999"]},{"id":"pod-admission","type":"Pod","name":"admission-webhook","namespace":"kube-system","risk_score":8.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"pod-sidecar","type":"Pod","name":"sidecar-proxy","namespace":"default","risk_score":5.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"sa-webapp","type":"ServiceAccount","name":"sa-webapp","namespace":"default","risk_score":5.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"sa-worker","type":"ServiceAccount","name":"sa-worker","namespace":"default","risk_score":4.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"sa-monitor","type":"ServiceAccount","name":"sa-monitor","namespace":"monitoring","risk_score":3.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"sa-cicd","type":"ServiceAccount","name":"sa-cicd","namespace":"ci","risk_score":8.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"sa-logger","type":"ServiceAccount","name":"sa-logger","namespace":"logging","risk_score":4.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"sa-default","type":"ServiceAccount","name":"default","namespace":"default","risk_score":6.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"role-secret-reader","type":"Role","name":"secret-reader","namespace":"default","risk_score":7.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"role-pod-exec","type":"Role","name":"pod-exec","namespace":"default","risk_score":8.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"role-node-reader","type":"Role","name":"node-reader","namespace":"default","risk_score":4.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"clusterrole-admin","type":"ClusterRole","name":"cluster-admin","namespace":"cluster","risk_score":10.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"clusterrole-view","type":"ClusterRole","name":"cluster-viewer","namespace":"cluster","risk_score":2.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"clusterrole-deploy","type":"ClusterRole","name":"deployer","namespace":"cluster","risk_score":7.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"secret-db-creds","type":"Secret","name":"db-credentials","namespace":"default","risk_score":9.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"secret-api-key","type":"Secret","name":"api-key","namespace":"default","risk_score":8.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"secret-tls","type":"Secret","name":"tls-cert","namespace":"default","risk_score":6.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"secret-admin-token","type":"Secret","name":"admin-token","namespace":"kube-system","risk_score":10.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"secret-cicd-token","type":"Secret","name":"cicd-deploy-token","namespace":"ci","risk_score":8.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"configmap-env","type":"ConfigMap","name":"app-env-config","namespace":"default","risk_score":3.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"configmap-dburl","type":"ConfigMap","name":"db-url-config","namespace":"default","risk_score":5.5,"is_source":false,"is_sink":false,"cves":[]},{"id":"db-production","type":"Database","name":"production-db","namespace":"data","risk_score":10.0,"is_source":false,"is_sink":true,"cves":[]},{"id":"db-analytics","type":"Database","name":"analytics-db","namespace":"data","risk_score":7.0,"is_source":false,"is_sink":true,"cves":[]},{"id":"node-worker-1","type":"Node","name":"worker-node-1","namespace":"cluster","risk_score":9.0,"is_source":false,"is_sink":true,"cves":["CVE-2024-3116"]},{"id":"node-worker-2","type":"Node","name":"worker-node-2","namespace":"cluster","risk_score":9.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"lb-service","type":"Service","name":"loadbalancer-svc","namespace":"default","risk_score":6.5,"is_source":true,"is_sink":false,"cves":[]},{"id":"svc-internal-api","type":"Service","name":"internal-api-svc","namespace":"default","risk_score":5.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"ns-default","type":"Namespace","name":"default","namespace":"cluster","risk_score":4.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"ns-kube-system","type":"Namespace","name":"kube-system","namespace":"cluster","risk_score":9.0,"is_source":false,"is_sink":true,"cves":[]},{"id":"pvc-data","type":"PersistentVolume","name":"data-pvc","namespace":"data","risk_score":7.0,"is_source":false,"is_sink":true,"cves":[]},{"id":"svc-service-a","type":"Service","name":"service-a","namespace":"default","risk_score":5.0,"is_source":false,"is_sink":false,"cves":[]},{"id":"svc-service-b","type":"Service","name":"service-b","namespace":"default","risk_score":5.0,"is_source":false,"is_sink":false,"cves":[]}],"edges":[{"comment":"=== PATH 1: dev-1 -> web-frontend -> sa-webapp -> role-secret-reader -> secret-db-creds -> production-db ==="},{"source":"user-dev1","target":"pod-webfront","relationship":"can-exec","weight":5.0,"cve":"CVE-2024-1234","cvss":8.1},{"source":"pod-webfront","target":"sa-webapp","relationship":"uses","weight":3.0,"cve":null,"cvss":null},{"source":"sa-webapp","target":"role-secret-reader","relationship":"bound-to","weight":4.0,"cve":null,"cvss":null},{"source":"role-secret-reader","target":"secret-db-creds","relationship":"can-read","weight":5.5,"cve":null,"cvss":null},{"source":"secret-db-creds","target":"db-production","relationship":"grants-access-to","weight":6.6,"cve":null,"cvss":null},{"comment":"=== PATH 2: internet -> lb-service -> pod-api -> sa-worker -> role-pod-exec -> node-worker-1 ==="},{"source":"internet","target":"lb-service","relationship":"reaches","weight":2.0,"cve":null,"cvss":null},{"source":"lb-service","target":"pod-api","relationship":"routes-to","weight":3.0,"cve":null,"cvss":null},{"source":"pod-api","target":"sa-worker","relationship":"uses","weight":3.5,"cve":"CVE-2023-4567","cvss":7.2},{"source":"sa-worker","target":"role-pod-exec","relationship":"bound-to","weight":5.0,"cve":null,"cvss":null},{"source":"role-pod-exec","target":"node-worker-1","relationship":"can-exec-on","weight":7.0,"cve":"CVE-2024-3116","cvss":9.0},{"comment":"=== PATH 3: cicd-bot -> sa-cicd -> clusterrole-deploy -> secret-cicd-token -> production-db ==="},{"source":"user-cicd","target":"sa-cicd","relationship":"impersonates","weight":4.0,"cve":null,"cvss":null},{"source":"sa-cicd","target":"clusterrole-deploy","relationship":"bound-to","weight":5.0,"cve":null,"cvss":null},{"source":"clusterrole-deploy","target":"secret-cicd-token","relationship":"can-read","weight":4.5,"cve":null,"cvss":null},{"source":"secret-cicd-token","target":"db-production","relationship":"grants-access-to","weight":7.0,"cve":null,"cvss":null},{"comment":"=== PATH 4: internet -> lb-service -> pod-webfront -> sa-default -> clusterrole-admin -> secret-admin-token -> kube-system ==="},{"source":"pod-webfront","target":"sa-default","relationship":"falls-back-to","weight":6.0,"cve":null,"cvss":null},{"source":"sa-default","target":"clusterrole-admin","relationship":"bound-to","weight":8.0,"cve":null,"cvss":null},{"source":"clusterrole-admin","target":"secret-admin-token","relationship":"can-read","weight":5.0,"cve":null,"cvss":null},{"source":"secret-admin-token","target":"ns-kube-system","relationship":"grants-access-to","weight":9.0,"cve":null,"cvss":null},{"comment":"=== PATH 5: dev-2 -> pod-logger -> sa-logger -> role-node-reader -> node-worker-1 -> pvc-data ==="},{"source":"user-dev2","target":"pod-logger","relationship":"can-exec","weight":4.0,"cve":"CVE-2024-9999","cvss":6.5},{"source":"pod-logger","target":"sa-logger","relationship":"uses","weight":3.0,"cve":null,"cvss":null},{"source":"sa-logger","target":"role-node-reader","relationship":"bound-to","weight":3.5,"cve":null,"cvss":null},{"source":"role-node-reader","target":"node-worker-1","relationship":"can-read","weight":4.5,"cve":null,"cvss":null},{"source":"node-worker-1","target":"pvc-data","relationship":"mounts","weight":5.0,"cve":null,"cvss":null},{"comment":"=== PATH 6: internet -> lb-service -> pod-api -> configmap-dburl -> db-analytics ==="},{"source":"pod-api","target":"configmap-dburl","relationship":"reads","weight":2.5,"cve":null,"cvss":null},{"source":"configmap-dburl","target":"db-analytics","relationship":"exposes-endpoint","weight":4.0,"cve":null,"cvss":null},{"comment":"=== CYCLE: service-a <-> service-b mutual admin grant (DFS cycle detection) ==="},{"source":"svc-service-a","target":"svc-service-b","relationship":"admin-grant","weight":5.0,"cve":null,"cvss":null},{"source":"svc-service-b","target":"svc-service-a","relationship":"admin-grant","weight":5.0,"cve":null,"cvss":null},{"comment":"=== ADDITIONAL EDGES (non-attack-path, realistic cluster noise) ==="},{"source":"pod-metrics","target":"sa-monitor","relationship":"uses","weight":2.0,"cve":null,"cvss":null},{"source":"sa-monitor","target":"clusterrole-view","relationship":"bound-to","weight":1.5,"cve":null,"cvss":null},{"source":"clusterrole-view","target":"configmap-env","relationship":"can-read","weight":1.0,"cve":null,"cvss":null},{"source":"pod-worker","target":"sa-worker","relationship":"uses","weight":2.0,"cve":null,"cvss":null},{"source":"pod-sidecar","target":"sa-webapp","relationship":"uses","weight":2.5,"cve":null,"cvss":null},{"source":"sa-webapp","target":"secret-tls","relationship":"can-read","weight":2.0,"cve":null,"cvss":null},{"source":"sa-webapp","target":"secret-api-key","relationship":"can-read","weight":4.0,"cve":null,"cvss":null},{"source":"secret-api-key","target":"db-analytics","relationship":"grants-access-to","weight":5.0,"cve":null,"cvss":null},{"source":"pod-admission","target":"ns-kube-system","relationship":"deployed-in","weight":3.0,"cve":null,"cvss":null},{"source":"pod-webfront","target":"svc-internal-api","relationship":"calls","weight":2.0,"cve":null,"cvss":null},{"source":"svc-internal-api","target":"pod-api","relationship":"routes-to","weight":2.0,"cve":null,"cvss":null},{"source":"user-dev1","target":"pod-worker","relationship":"can-exec","weight":3.0,"cve":null,"cvss":null},{"source":"node-worker-2","target":"ns-default","relationship":"hosts","weight":1.0,"cve":null,"cvss":null},{"source":"pod-api","target":"secret-api-key","relationship":"mounts","weight":3.0,"cve":null,"cvss":null},{"source":"sa-cicd","target":"secret-cicd-token","relationship":"can-read","weight":3.0,"cve":null,"cvss":null},{"source":"clusterrole-admin","target":"ns-default","relationship":"admin-over","weight":6.0,"cve":null,"cvss":null},{"source":"role-pod-exec","target":"node-worker-2","relationship":"can-exec-on","weight":7.0,"cve":null,"cvss":null},{"source":"pod-logger","target":"configmap-env","relationship":"reads","weight":1.5,"cve":null,"cvss":null},{"source":"internet","target":"pod-webfront","relationship":"reaches","weight":4.0,"cve":"CVE-2024-1234","cvss":8.1},{"source":"lb-service","target":"pod-webfront","relationship":"routes-to","weight":3.0,"cve":null,"cvss":null},{"source":"sa-default","target":"secret-db-creds","relationship":"can-read","weight":7.0,"cve":null,"cvss":null}]};
+    const COLORS = { source: "#f59e0b", sink: "#ef4444", cycle: "#a855f7", critical: "#f97316", safe: "#22c55e", cve: "#ef4444" };
+    const CYCLE_IDS = new Set(["svc-service-a", "svc-service-b"]);
+    const CRITICAL_IDS = new Set(["pod-webfront","pod-api","pod-logger","pod-worker","sa-webapp","sa-default","sa-worker","sa-cicd","sa-logger","role-secret-reader","role-pod-exec","role-node-reader","clusterrole-admin","clusterrole-deploy","secret-db-creds","secret-admin-token","secret-cicd-token","configmap-dburl","svc-internal-api","lb-service"]);
+
+    const nodes = GRAPH_DATA.nodes.map((d) => ({ ...d }));
+    const rawEdges = GRAPH_DATA.edges.filter((e) => e.source && e.target).map((e, i) => ({ ...e, sourceId: e.source, targetId: e.target, key: `${e.source}->${e.target}`, edgeId: `edge-${i}` }));
+    const edges = rawEdges.map((e) => ({ ...e, source: e.sourceId, target: e.targetId }));
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
+    const sourceNodes = nodes.filter((n) => n.is_source);
+    const sinkNodes = nodes.filter((n) => n.is_sink);
+    const outgoing = d3.group(rawEdges, (e) => e.sourceId);
+    const incoming = d3.group(rawEdges, (e) => e.targetId);
+    const edgeKeys = new Set(rawEdges.map((e) => e.key));
+    const reciprocalKeys = new Set(rawEdges.filter((e) => edgeKeys.has(`${e.targetId}->${e.sourceId}`)).map((e) => e.key));
+
+    const statsEl = document.getElementById("stats");
+    const focusEl = document.getElementById("focusCopy");
+    const selectedEl = document.getElementById("selectedCard");
+    const tooltipEl = document.getElementById("tooltip");
+
+    const esc = (v) => String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+    const radius = (n) => n.is_sink ? 11.5 : n.is_source ? 10.5 : CYCLE_IDS.has(n.id) ? 10 : 9;
+    const color = (n) => CYCLE_IDS.has(n.id) ? COLORS.cycle : n.is_sink ? COLORS.sink : CRITICAL_IDS.has(n.id) ? COLORS.critical : n.is_source ? COLORS.source : COLORS.safe;
+    const nsBand = (ns) => ((Math.max(["external","ci","default","logging","monitoring","cluster","kube-system","data"].indexOf(ns), 0)) + 1) / 9;
+    const typeBand = (n) => n.is_sink ? 0.94 : n.is_source ? 0.1 : ({ ExternalActor:0.08, User:0.12, Service:0.26, Pod:0.34, ServiceAccount:0.46, Role:0.58, ClusterRole:0.67, ConfigMap:0.74, Secret:0.8, Namespace:0.86, Node:0.9, Database:0.92, PersistentVolume:0.96 }[n.type] ?? 0.52);
+    const pathKeys = (ids) => ids.slice(0, -1).map((id, i) => `${id}->${ids[i + 1]}`);
+
+    function dijkstra(sourceId, targetId) {
+      const dist = new Map(nodes.map((n) => [n.id, Number.POSITIVE_INFINITY]));
+      const prev = new Map();
+      const visited = new Set();
+      dist.set(sourceId, 0);
+      while (visited.size < nodes.length) {
+        let current = null, best = Number.POSITIVE_INFINITY;
+        for (const [id, value] of dist.entries()) if (!visited.has(id) && value < best) { current = id; best = value; }
+        if (current === null || best === Number.POSITIVE_INFINITY) break;
+        if (current === targetId) break;
+        visited.add(current);
+        for (const edge of (outgoing.get(current) || [])) {
+          const candidate = dist.get(current) + Number(edge.weight || 1);
+          if (candidate < dist.get(edge.targetId)) { dist.set(edge.targetId, candidate); prev.set(edge.targetId, current); }
+        }
+      }
+      if (sourceId !== targetId && !prev.has(targetId)) return null;
+      const nodeIds = [targetId];
+      let cursor = targetId;
+      while (cursor !== sourceId) {
+        cursor = prev.get(cursor);
+        if (!cursor) return null;
+        nodeIds.unshift(cursor);
+      }
+      return { nodeIds, edgeKeys: pathKeys(nodeIds), totalCost: Number(dist.get(targetId).toFixed(1)) };
+    }
+
+    function shortestAttackPaths() {
+      const seen = new Set();
+      const paths = [];
+      for (const source of sourceNodes) for (const sink of sinkNodes) {
+        const path = dijkstra(source.id, sink.id);
+        if (!path) continue;
+        const sig = path.nodeIds.join("->");
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        paths.push(path);
+      }
+      return paths;
+    }
+
+    function blastRadius(maxHops = 3) {
+      let total = 0;
+      for (const source of sourceNodes) {
+        const visited = new Set([source.id]);
+        const queue = [{ id: source.id, depth: 0 }];
+        while (queue.length) {
+          const current = queue.shift();
+          if (current.depth >= maxHops) continue;
+          for (const edge of (outgoing.get(current.id) || [])) {
+            if (visited.has(edge.targetId)) continue;
+            visited.add(edge.targetId);
+            total += 1;
+            queue.push({ id: edge.targetId, depth: current.depth + 1 });
+          }
+        }
+      }
+      return total;
+    }
+
+    function allSimplePaths({ banned = null, cutoff = 10 } = {}) {
+      const sinks = new Set(sinkNodes.map((n) => n.id));
+      const paths = [];
+      function dfs(current, path, visited) {
+        if (path.length - 1 > cutoff) return;
+        if (path.length > 1 && sinks.has(current)) { paths.push([...path]); return; }
+        if (path.length - 1 === cutoff) return;
+        for (const edge of (outgoing.get(current) || [])) {
+          const next = edge.targetId;
+          if (next === banned || visited.has(next)) continue;
+          visited.add(next);
+          path.push(next);
+          dfs(next, path, visited);
+          path.pop();
+          visited.delete(next);
+        }
+      }
+      for (const source of sourceNodes) {
+        if (source.id === banned) continue;
+        dfs(source.id, [source.id], new Set([source.id]));
+      }
+      return paths;
+    }
+
+    function criticalNode() {
+      const baseline = allSimplePaths().length;
+      let best = null;
+      for (const node of nodes) {
+        if (node.is_source || node.is_sink) continue;
+        const remaining = allSimplePaths({ banned: node.id }).length;
+        const removed = baseline - remaining;
+        if (!best || removed > best.pathsEliminated) best = { nodeId: node.id, nodeName: node.name, pathsEliminated: removed };
+      }
+      return best;
+    }
+
+    function cycleCount() {
+      const visited = new Set(), order = [];
+      function fwd(id) { visited.add(id); for (const edge of (outgoing.get(id) || [])) if (!visited.has(edge.targetId)) fwd(edge.targetId); order.push(id); }
+      for (const node of nodes) if (!visited.has(node.id)) fwd(node.id);
+      const revVisited = new Set(); let count = 0;
+      function rev(id, bucket) { revVisited.add(id); bucket.push(id); for (const edge of (incoming.get(id) || [])) if (!revVisited.has(edge.sourceId)) rev(edge.sourceId, bucket); }
+      while (order.length) {
+        const id = order.pop();
+        if (revVisited.has(id)) continue;
+        const bucket = [];
+        rev(id, bucket);
+        if (bucket.length > 1 || edgeKeys.has(`${id}->${id}`)) count += 1;
+      }
+      return count;
+    }
+
+    const attackPaths = shortestAttackPaths();
+    const attackNodeIds = new Set(attackPaths.flatMap((p) => p.nodeIds));
+    const attackEdgeKeys = new Set(attackPaths.flatMap((p) => p.edgeKeys));
+    const cveEdges = rawEdges.filter((e) => e.cve);
+    const cveNodeIds = new Set(cveEdges.flatMap((e) => [e.sourceId, e.targetId]));
+    const cveEdgeKeys = new Set(cveEdges.map((e) => e.key));
+    const critical = criticalNode();
+    const FILTERS = {
+      all: { text: "Showing every node and directed relationship in the official organizer dataset.", nodes: new Set(nodes.map((n) => n.id)), edges: new Set(rawEdges.map((e) => e.key)) },
+      critical: { text: "Showing the shortest source-to-sink attack routes that drive the attack-path count.", nodes: attackNodeIds, edges: attackEdgeKeys },
+      cve: { text: "Showing only CVE-tagged edges and the nodes directly exposed by those vulnerable traversals.", nodes: cveNodeIds, edges: cveEdgeKeys }
+    };
+
+    statsEl.innerHTML = [
+      `<div class="stat"><span>Attack Paths</span><strong>${attackPaths.length}</strong></div>`,
+      `<div class="stat"><span>Blast-Radius Nodes</span><strong>${blastRadius(3)}</strong></div>`,
+      `<div class="stat"><span>Cycles</span><strong>${cycleCount()}</strong></div>`,
+      `<div class="stat critical"><span>Critical</span><strong>${esc(critical.nodeName)}</strong></div>`
+    ].join("");
+
+    const svg = d3.select("#graph");
+    const defs = svg.append("defs");
+    defs.append("marker").attr("id", "arrow").attr("viewBox", "0 -5 10 10").attr("refX", 21).attr("refY", 0).attr("markerWidth", 8).attr("markerHeight", 8).attr("orient", "auto").append("path").attr("d", "M0,-4L10,0L0,4").attr("fill", "rgba(159,176,205,0.54)");
+    defs.append("marker").attr("id", "arrow-cve").attr("viewBox", "0 -5 10 10").attr("refX", 21).attr("refY", 0).attr("markerWidth", 8).attr("markerHeight", 8).attr("orient", "auto").append("path").attr("d", "M0,-4L10,0L0,4").attr("fill", COLORS.cve);
+    const glow = defs.append("filter").attr("id", "glow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
+    glow.append("feGaussianBlur").attr("stdDeviation", "3.2").attr("result", "blur");
+    const merge = glow.append("feMerge"); merge.append("feMergeNode"); merge.append("feMergeNode").attr("in", "SourceGraphic");
+
+    let width = window.innerWidth, height = window.innerHeight, currentFilter = "all", selectedId = null;
+    const layer = svg.append("g"), edgeLayer = layer.append("g"), labelLayer = layer.append("g"), nodeLayer = layer.append("g");
+    const link = edgeLayer.selectAll("path").data(edges, (d) => d.edgeId).join("path").attr("class", (d) => `edge${d.cve ? " cve" : ""}`).attr("marker-end", (d) => `url(#${d.cve ? "arrow-cve" : "arrow"})`);
+    const edgeLabels = labelLayer.selectAll("text").data(edges.filter((d) => d.cve), (d) => d.edgeId).join("text").attr("class", "edge-label").text((d) => `${d.cve} | CVSS ${Number(d.cvss).toFixed(1)}`);
+    const node = nodeLayer.selectAll("g").data(nodes, (d) => d.id).join("g").style("cursor", "pointer");
+    node.append("circle").attr("class", (d) => `node-ring${d.cves.length ? " vuln" : ""}`).attr("r", (d) => radius(d) + 5);
+    node.append("circle").attr("class", "node-core").attr("r", (d) => radius(d)).attr("fill", (d) => color(d));
+    node.append("text").attr("class", "node-label").attr("dx", 14).attr("dy", -2).text((d) => d.name);
+    node.append("text").attr("class", "node-type").attr("dx", 14).attr("dy", 11).text((d) => d.type);
+
+    const sim = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(edges).id((d) => d.id).distance((d) => 52 + Number(d.weight || 1) * 12).strength(0.4))
+      .force("charge", d3.forceManyBody().strength(-420))
+      .force("collide", d3.forceCollide().radius((d) => radius(d) + 26))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("x", d3.forceX((d) => width * typeBand(d)).strength((d) => d.is_source || d.is_sink ? 0.42 : 0.12))
+      .force("y", d3.forceY((d) => height * nsBand(d.namespace)).strength(0.16))
+      .alpha(1);
+
+    function drag(simulation) {
+      return d3.drag()
+        .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.24).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+        .on("end", (event) => { if (!event.active) simulation.alphaTarget(0); });
+    }
+    node.call(drag(sim));
+
+    const curve = (e) => reciprocalKeys.has(e.key) ? (e.sourceId < e.targetId ? 34 : -34) : 0;
+    function pathFor(e) {
+      const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y, dist = Math.hypot(dx, dy) || 1, bend = curve(e);
+      const sx = e.source.x + (dx / dist) * radius(e.source), sy = e.source.y + (dy / dist) * radius(e.source);
+      const tx = e.target.x - (dx / dist) * (radius(e.target) + 11), ty = e.target.y - (dy / dist) * (radius(e.target) + 11);
+      if (!bend) return `M${sx},${sy} L${tx},${ty}`;
+      const mx = (sx + tx) / 2, my = (sy + ty) / 2, nx = (-dy / dist) * bend, ny = (dx / dist) * bend;
+      return `M${sx},${sy} Q${mx + nx},${my + ny} ${tx},${ty}`;
+    }
+    function labelPos(e) {
+      const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y, dist = Math.hypot(dx, dy) || 1, bend = curve(e);
+      const mx = (e.source.x + e.target.x) / 2, my = (e.source.y + e.target.y) / 2;
+      return bend ? [mx + (-dy / dist) * bend * 0.55, my + (dx / dist) * bend * 0.55 - 8] : [mx, my - 6];
+    }
+
+    function visibleNodes() { return FILTERS[currentFilter].nodes; }
+    function visibleEdges() { return FILTERS[currentFilter].edges; }
+    function neighborhood() {
+      const neighbors = new Set(), edgesSet = new Set();
+      if (!selectedId) return { neighbors, edges: edgesSet };
+      for (const edge of rawEdges) if (visibleEdges().has(edge.key) && (edge.sourceId === selectedId || edge.targetId === selectedId)) {
+        neighbors.add(edge.sourceId); neighbors.add(edge.targetId); edgesSet.add(edge.key);
+      }
+      return { neighbors, edges: edgesSet };
+    }
+
+    function renderSelected() {
+      if (!selectedId) {
+        selectedEl.innerHTML = `<h2 class="title">No node selected</h2><p class="copy">Hover for tooltip details, or click a node to highlight its inbound and outbound attack edges.</p>`;
+        return;
+      }
+      const n = nodeById.get(selectedId);
+      const neigh = new Set();
+      for (const edge of rawEdges) { if (edge.sourceId === selectedId) neigh.add(edge.targetId); if (edge.targetId === selectedId) neigh.add(edge.sourceId); }
+      selectedEl.innerHTML = `<h2 class="title">${esc(n.name)}</h2><dl><dt>ID</dt><dd>${esc(n.id)}</dd><dt>Type</dt><dd>${esc(n.type)}</dd><dt>Namespace</dt><dd>${esc(n.namespace)}</dd><dt>Risk Score</dt><dd>${Number(n.risk_score).toFixed(1)}</dd><dt>Direct Neighbors</dt><dd>${neigh.size}</dd><dt>CVEs</dt><dd>${n.cves.length ? esc(n.cves.join(", ")) : "None"}</dd></dl>`;
+    }
+
+    function showTooltip(event, n) {
+      tooltipEl.hidden = false;
+      tooltipEl.innerHTML = `<h3>${esc(n.name)}</h3><dl><dt>Type</dt><dd>${esc(n.type)}</dd><dt>Namespace</dt><dd>${esc(n.namespace)}</dd><dt>Risk</dt><dd>${Number(n.risk_score).toFixed(1)}</dd></dl><div class="cves"><strong>CVEs:</strong> ${n.cves.length ? esc(n.cves.join(", ")) : "None"}</div>`;
+      moveTooltip(event);
+    }
+    function moveTooltip(event) { tooltipEl.style.left = `${Math.min(event.pageX + 18, window.innerWidth - 300)}px`; tooltipEl.style.top = `${Math.min(event.pageY + 18, window.innerHeight - 170)}px`; }
+    function hideTooltip() { tooltipEl.hidden = true; }
+
+    function paint() {
+      const vn = visibleNodes(), ve = visibleEdges(), hood = neighborhood();
+      focusEl.textContent = FILTERS[currentFilter].text;
+      node.style("opacity", (d) => !vn.has(d.id) ? 0.06 : !selectedId ? 1 : hood.neighbors.has(d.id) || d.id === selectedId ? 1 : 0.16)
+        .style("pointer-events", (d) => vn.has(d.id) ? "auto" : "none");
+      node.select(".node-core").attr("stroke-width", (d) => selectedId === d.id ? 3 : 1.5).attr("r", (d) => selectedId === d.id ? radius(d) + 2.4 : radius(d));
+      link.style("opacity", (d) => !ve.has(d.key) ? 0.025 : !selectedId ? (d.cve ? 0.96 : 0.48) : hood.edges.has(d.key) ? 1 : 0.08)
+        .attr("stroke-width", (d) => selectedId && hood.edges.has(d.key) ? (d.cve ? 3.6 : 2.8) : (d.cve ? 2.2 : 1.25));
+      edgeLabels.style("opacity", (d) => !ve.has(d.key) ? 0 : !selectedId ? 0.98 : hood.edges.has(d.key) ? 0.98 : 0.05);
+      node.selectAll(".node-label,.node-type").style("opacity", function (_, i, arr) {
+        const d = d3.select(arr[i].parentNode).datum();
+        return !vn.has(d.id) ? 0 : !selectedId ? 0.96 : hood.neighbors.has(d.id) || d.id === selectedId ? 0.96 : 0.18;
+      });
+    }
+
+    document.querySelectorAll(".filter-btn").forEach((btn) => btn.addEventListener("click", () => {
+      currentFilter = btn.dataset.filter;
+      if (selectedId && !FILTERS[currentFilter].nodes.has(selectedId)) selectedId = null;
+      document.querySelectorAll(".filter-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      renderSelected(); paint();
+    }));
+
+    node.on("mouseenter", (event, d) => showTooltip(event, d)).on("mousemove", moveTooltip).on("mouseleave", hideTooltip).on("click", (event, d) => {
+      event.stopPropagation();
+      selectedId = selectedId === d.id ? null : d.id;
+      renderSelected(); paint();
+    });
+    svg.on("click", () => { selectedId = null; renderSelected(); paint(); });
+
+    const zoom = d3.zoom().scaleExtent([0.35, 3.6]).on("zoom", (event) => layer.attr("transform", event.transform));
+    svg.call(zoom);
+
+    sim.on("tick", () => {
+      link.attr("d", pathFor);
+      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
+      edgeLabels.attr("x", (d) => labelPos(d)[0]).attr("y", (d) => labelPos(d)[1]);
+    });
+
+    function resize() {
+      width = window.innerWidth; height = window.innerHeight;
+      svg.attr("viewBox", `0 0 ${width} ${height}`);
+      sim.force("center", d3.forceCenter(width / 2, height / 2));
+      sim.force("x", d3.forceX((d) => width * typeBand(d)).strength((d) => d.is_source || d.is_sink ? 0.42 : 0.12));
+      sim.force("y", d3.forceY((d) => height * nsBand(d.namespace)).strength(0.16));
+      sim.alpha(0.35).restart();
+    }
+    window.addEventListener("resize", resize);
+    resize();
+    renderSelected();
+    paint();
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width * 0.04, height * 0.03).scale(0.94));
+  </script>
+</body>
+</html>

@@ -1,0 +1,639 @@
+/**
+ * Cybersecurity Professional Theme
+ * Advanced color system and design tokens for SOC-grade UI
+ */
+
+/* ============================================
+   COLOR SYSTEM
+   ============================================ */
+
+:root {
+    /* Primary Backgrounds - Deep Space Theme */
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #0f1419;
+    --bg-tertiary: #161b22;
+    --bg-elevated: #1c2128;
+    --bg-overlay: rgba(10, 14, 26, 0.95);
+
+    /* Accent Colors - Cybersecurity Neon Palette */
+    --accent-primary: #00ff9f;
+    /* Matrix green - primary actions */
+    --accent-secondary: #00d9ff;
+    /* Cyber blue - secondary actions */
+    --accent-danger: #ff006e;
+    /* Critical red - alerts/errors */
+    --accent-warning: #ffbe0b;
+    /* Warning yellow - cautions */
+    --accent-success: #06ffa5;
+    /* Success teal - confirmations */
+    --accent-info: #7c3aed;
+    /* Info purple - information */
+
+    /* Gradient Overlays */
+    --gradient-cyber: linear-gradient(135deg, #00ff9f 0%, #00d9ff 100%);
+    --gradient-cyber-reverse: linear-gradient(135deg, #00d9ff 0%, #00ff9f 100%);
+    --gradient-danger: linear-gradient(135deg, #ff006e 0%, #ff1744 100%);
+    --gradient-warning: linear-gradient(135deg, #ffbe0b 0%, #f59e0b 100%);
+    --gradient-success: linear-gradient(135deg, #06ffa5 0%, #10b981 100%);
+    --gradient-card: linear-gradient(135deg, rgba(0, 255, 159, 0.1) 0%, rgba(0, 217, 255, 0.1) 100%);
+    --gradient-card-hover: linear-gradient(135deg, rgba(0, 255, 159, 0.15) 0%, rgba(0, 217, 255, 0.15) 100%);
+
+    /* Text Colors - High Contrast */
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-tertiary: #6e7681;
+    --text-accent: #00ff9f;
+    --text-muted: #484f58;
+    --text-inverse: #0a0e1a;
+
+    /* Border Colors */
+    --border-default: #30363d;
+    --border-subtle: #21262d;
+    --border-muted: #1c2128;
+    --border-glow: rgba(0, 255, 159, 0.3);
+    --border-glow-strong: rgba(0, 255, 159, 0.6);
+    --border-danger: rgba(255, 0, 110, 0.5);
+    --border-warning: rgba(255, 190, 11, 0.5);
+
+    /* Shadow System */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
+    --shadow-2xl: 0 25px 50px rgba(0, 0, 0, 0.7);
+    --shadow-glow: 0 0 20px rgba(0, 255, 159, 0.3);
+    --shadow-glow-strong: 0 0 30px rgba(0, 255, 159, 0.5);
+    --shadow-danger-glow: 0 0 20px rgba(255, 0, 110, 0.4);
+
+    /* Typography Scale */
+    --text-xs: 0.75rem;
+    /* 12px */
+    --text-sm: 0.875rem;
+    /* 14px */
+    --text-base: 1rem;
+    /* 16px */
+    --text-lg: 1.125rem;
+    /* 18px */
+    --text-xl: 1.25rem;
+    /* 20px */
+    --text-2xl: 1.5rem;
+    /* 24px */
+    --text-3xl: 1.875rem;
+    /* 30px */
+    --text-4xl: 2.25rem;
+    /* 36px */
+    --text-5xl: 3rem;
+    /* 48px */
+
+    /* Spacing Scale */
+    --space-1: 0.25rem;
+    /* 4px */
+    --space-2: 0.5rem;
+    /* 8px */
+    --space-3: 0.75rem;
+    /* 12px */
+    --space-4: 1rem;
+    /* 16px */
+    --space-5: 1.25rem;
+    /* 20px */
+    --space-6: 1.5rem;
+    /* 24px */
+    --space-8: 2rem;
+    /* 32px */
+    --space-10: 2.5rem;
+    /* 40px */
+    --space-12: 3rem;
+    /* 48px */
+    --space-16: 4rem;
+    /* 64px */
+    --space-20: 5rem;
+    /* 80px */
+
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 20px;
+    --radius-full: 9999px;
+
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 350ms ease;
+    --transition-bounce: 300ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    /* Z-Index System */
+    --z-base: 0;
+    --z-dropdown: 1000;
+    --z-sticky: 1020;
+    --z-fixed: 1030;
+    --z-modal-backdrop: 1040;
+    --z-modal: 1050;
+    --z-popover: 1060;
+    --z-tooltip: 1070;
+}
+
+/* ============================================
+   FONT IMPORTS
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+    --font-mono: 'Fira Code', 'Courier New', Consolas, monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Rajdhani', 'Press Start 2P', sans-serif;
+    --font-pixel: 'Press Start 2P', monospace;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* Headings with cybersecurity font */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
+}
+
+/* Code blocks and terminals */
+code,
+pre,
+.terminal {
+    font-family: var(--font-mono);
+}
+
+/* ============================================
+   GLASSMORPHISM UTILITIES
+   ============================================ */
+
+.glass {
+    background: rgba(22, 27, 34, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.glass-strong {
+    background: rgba(28, 33, 40, 0.8);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(0, 255, 159, 0.2);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl),
+        0 0 0 1px rgba(0, 255, 159, 0.1);
+}
+
+.glass-elevated {
+    background: rgba(28, 33, 40, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 255, 159, 0.25);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-2xl),
+        var(--shadow-glow);
+}
+
+.glass-minimal {
+    background: rgba(22, 27, 34, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+}
+
+/* ============================================
+   GLOW EFFECTS
+   ============================================ */
+
+.glow-primary {
+    box-shadow: 0 0 20px rgba(0, 255, 159, 0.3),
+        0 0 40px rgba(0, 255, 159, 0.1);
+}
+
+.glow-primary-strong {
+    box-shadow: 0 0 30px rgba(0, 255, 159, 0.5),
+        0 0 60px rgba(0, 255, 159, 0.2);
+}
+
+.glow-danger {
+    box-shadow: 0 0 20px rgba(255, 0, 110, 0.4),
+        0 0 40px rgba(255, 0, 110, 0.15);
+}
+
+.glow-warning {
+    box-shadow: 0 0 20px rgba(255, 190, 11, 0.4),
+        0 0 40px rgba(255, 190, 11, 0.15);
+}
+
+/* Hover glow enhancement */
+.glow-hover:hover {
+    box-shadow: 0 0 30px rgba(0, 255, 159, 0.5),
+        0 0 60px rgba(0, 255, 159, 0.25);
+    transition: box-shadow var(--transition-base);
+}
+
+/* ============================================
+   GRADIENT BACKGROUNDS
+   ============================================ */
+
+.bg-gradient-cyber {
+    background: var(--gradient-cyber);
+}
+
+.bg-gradient-cyber-reverse {
+    background: var(--gradient-cyber-reverse);
+}
+
+.bg-gradient-danger {
+    background: var(--gradient-danger);
+}
+
+.bg-gradient-card {
+    background: var(--gradient-card);
+}
+
+.bg-gradient-card:hover {
+    background: var(--gradient-card-hover);
+}
+
+/* ============================================
+   BORDER STYLES
+   ============================================ */
+
+.border-glow {
+    border: 1px solid var(--border-glow);
+}
+
+.border-glow-strong {
+    border: 2px solid var(--border-glow-strong);
+}
+
+.border-gradient {
+    position: relative;
+    border: none;
+}
+
+.border-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-cyber);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+}
+
+/* ============================================
+   BUTTON STYLES
+   ============================================ */
+
+.btn-cyber {
+    position: relative;
+    background: var(--gradient-cyber);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-6);
+    color: var(--text-inverse);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-base);
+    cursor: pointer;
+    overflow: hidden;
+    transition: all var(--transition-base);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.btn-cyber::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: var(--gradient-cyber);
+    border-radius: var(--radius-md);
+    z-index: -1;
+    filter: blur(10px);
+    opacity: 0;
+    transition: opacity var(--transition-base);
+}
+
+.btn-cyber:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 40px rgba(0, 255, 159, 0.4);
+}
+
+.btn-cyber:hover::before {
+    opacity: 0.8;
+}
+
+.btn-cyber:active {
+    transform: translateY(0);
+}
+
+.btn-danger {
+    background: var(--gradient-danger);
+}
+
+.btn-danger::before {
+    background: var(--gradient-danger);
+}
+
+.btn-danger:hover {
+    box-shadow: 0 10px 40px rgba(255, 0, 110, 0.4);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.btn-outline:hover {
+    background: var(--accent-primary);
+    color: var(--text-inverse);
+}
+
+/* ============================================
+   CARD COMPONENTS
+   ============================================ */
+
+.cyber-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    transition: all var(--transition-base);
+}
+
+.cyber-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
+}
+
+.cyber-card-elevated {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-glow);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    box-shadow: var(--shadow-lg);
+}
+
+.cyber-card-glass {
+    background: rgba(22, 27, 34, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 255, 159, 0.2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-xl),
+        0 0 20px rgba(0, 255, 159, 0.1);
+}
+
+/* ============================================
+   BADGE/PILL COMPONENTS
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-success {
+    background: rgba(6, 255, 165, 0.15);
+    color: var(--accent-success);
+    border: 1px solid rgba(6, 255, 165, 0.3);
+}
+
+.badge-danger {
+    background: rgba(255, 0, 110, 0.15);
+    color: var(--accent-danger);
+    border: 1px solid rgba(255, 0, 110, 0.3);
+}
+
+.badge-warning {
+    background: rgba(255, 190, 11, 0.15);
+    color: var(--accent-warning);
+    border: 1px solid rgba(255, 190, 11, 0.3);
+}
+
+.badge-info {
+    background: rgba(0, 217, 255, 0.15);
+    color: var(--accent-secondary);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+/* Text colors */
+.text-primary {
+    color: var(--text-primary);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.text-tertiary {
+    color: var(--text-tertiary);
+}
+
+.text-accent {
+    color: var(--text-accent);
+}
+
+.text-danger {
+    color: var(--accent-danger);
+}
+
+.text-warning {
+    color: var(--accent-warning);
+}
+
+.text-success {
+    color: var(--accent-success);
+}
+
+/* Background colors */
+.bg-primary {
+    background-color: var(--bg-primary);
+}
+
+.bg-secondary {
+    background-color: var(--bg-secondary);
+}
+
+.bg-tertiary {
+    background-color: var(--bg-tertiary);
+}
+
+.bg-elevated {
+    background-color: var(--bg-elevated);
+}
+
+/* Spacing utilities */
+.p-0 {
+    padding: 0;
+}
+
+.p-1 {
+    padding: var(--space-1);
+}
+
+.p-2 {
+    padding: var(--space-2);
+}
+
+.p-3 {
+    padding: var(--space-3);
+}
+
+.p-4 {
+    padding: var(--space-4);
+}
+
+.p-6 {
+    padding: var(--space-6);
+}
+
+.p-8 {
+    padding: var(--space-8);
+}
+
+.m-0 {
+    margin: 0;
+}
+
+.m-1 {
+    margin: var(--space-1);
+}
+
+.m-2 {
+    margin: var(--space-2);
+}
+
+.m-3 {
+    margin: var(--space-3);
+}
+
+.m-4 {
+    margin: var(--space-4);
+}
+
+.m-6 {
+    margin: var(--space-6);
+}
+
+.m-8 {
+    margin: var(--space-8);
+}
+
+/* Border radius */
+.rounded-sm {
+    border-radius: var(--radius-sm);
+}
+
+.rounded-md {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+.rounded-xl {
+    border-radius: var(--radius-xl);
+}
+
+.rounded-full {
+    border-radius: var(--radius-full);
+}
+
+/* Flex utilities */
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.gap-2 {
+    gap: var(--space-2);
+}
+
+.gap-3 {
+    gap: var(--space-3);
+}
+
+.gap-4 {
+    gap: var(--space-4);
+}
+
+.gap-6 {
+    gap: var(--space-6);
+}
+
+/* Hover effects */
+.hover-lift:hover {
+    transform: translateY(-2px);
+    transition: transform var(--transition-base);
+}
+
+.hover-scale:hover {
+    transform: scale(1.05);
+    transition: transform var(--transition-base);
+}
+
+.hover-glow:hover {
+    box-shadow: var(--shadow-glow);
+    transition: box-shadow var(--transition-base);
+}

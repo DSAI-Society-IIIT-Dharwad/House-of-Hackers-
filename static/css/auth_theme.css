@@ -1,0 +1,340 @@
+/*
+ * Cybersecurity Auth Theme
+ * Modern, animated authentication pages
+ */
+
+/* ==================== BASE STYLES ==================== */
+
+:root {
+    --accent: #00ff9f;
+    --accent-hover: #00bc7d;
+    --secondary-accent: #00d4ff;
+    --bg-dark: #050a14;
+    --bg-card: rgba(10, 14, 26, 0.6);
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --border-subtle: rgba(0, 255, 159, 0.2);
+    --error: #ff4444;
+    --warning: #ffaa00;
+    --success: #00ff9f;
+}
+
+/* ==================== ANIMATIONS ==================== */
+
+@keyframes pulse-glow {
+    0%, 100% {
+        text-shadow: 0 0 10px rgba(0, 255, 159, 0.5);
+    }
+    50% {
+        text-shadow: 0 0 20px rgba(0, 255, 159, 0.8), 0 0 30px rgba(0, 255, 159, 0.4);
+    }
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes scan-line {
+    0% {
+        transform: translateY(-100%);
+    }
+    100% {
+        transform: translateY(100vh);
+    }
+}
+
+@keyframes border-pulse {
+    0%, 100% {
+        border-color: rgba(0, 255, 159, 0.2);
+    }
+    50% {
+        border-color: rgba(0, 255, 159, 0.5);
+    }
+}
+
+@keyframes fade-in-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ==================== GLASSMORPHISM ==================== */
+
+.glass {
+    background: rgba(10, 14, 26, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 255, 159, 0.1);
+    border-radius: 16px;
+}
+
+.glass-elevated {
+    background: rgba(10, 14, 26, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(0, 255, 159, 0.15);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ==================== CARDS ==================== */
+
+.cyber-card {
+    animation: scale-in 0.5s ease-out;
+    transition: all 0.3s ease;
+}
+
+.cyber-card:hover {
+    border-color: rgba(0, 255, 159, 0.3);
+    box-shadow: 0 0 30px rgba(0, 255, 159, 0.1);
+}
+
+/* ==================== INPUTS ==================== */
+
+.stTextInput input {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: 8px !important;
+    color: var(--text-primary) !important;
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+    transition: all 0.3s ease !important;
+}
+
+.stTextInput input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 15px rgba(0, 255, 159, 0.2) !important;
+    outline: none !important;
+}
+
+.stTextInput input::placeholder {
+    color: var(--text-secondary) !important;
+}
+
+.stTextInput label {
+    color: var(--accent) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+}
+
+/* ==================== BUTTONS ==================== */
+
+.stButton button {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%) !important;
+    color: var(--bg-dark) !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 14px 24px !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+}
+
+.stButton button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(0, 255, 159, 0.4) !important;
+}
+
+.stButton button:active {
+    transform: translateY(0) !important;
+}
+
+/* Secondary button style */
+.stButton button[kind="secondary"] {
+    background: transparent !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: var(--text-primary) !important;
+}
+
+.stButton button[kind="secondary"]:hover {
+    background: rgba(0, 255, 159, 0.1) !important;
+    border-color: var(--accent) !important;
+}
+
+/* ==================== FORMS ==================== */
+
+.stForm {
+    animation: fade-in-up 0.6s ease-out;
+}
+
+.stCheckbox label {
+    color: var(--text-secondary) !important;
+}
+
+.stCheckbox input:checked + label {
+    color: var(--accent) !important;
+}
+
+/* ==================== MESSAGES ==================== */
+
+.stSuccess {
+    background: rgba(0, 255, 159, 0.1) !important;
+    border: 1px solid rgba(0, 255, 159, 0.3) !important;
+    border-radius: 8px !important;
+    color: var(--success) !important;
+    padding: 12px 16px !important;
+}
+
+.stError {
+    background: rgba(255, 68, 68, 0.1) !important;
+    border: 1px solid rgba(255, 68, 68, 0.3) !important;
+    border-radius: 8px !important;
+    color: var(--error) !important;
+    padding: 12px 16px !important;
+}
+
+.stWarning {
+    background: rgba(255, 170, 0, 0.1) !important;
+    border: 1px solid rgba(255, 170, 0, 0.3) !important;
+    border-radius: 8px !important;
+    color: var(--warning) !important;
+    padding: 12px 16px !important;
+}
+
+.stInfo {
+    background: rgba(0, 212, 255, 0.1) !important;
+    border: 1px solid rgba(0, 212, 255, 0.3) !important;
+    border-radius: 8px !important;
+    color: var(--secondary-accent) !important;
+    padding: 12px 16px !important;
+}
+
+/* ==================== DIVIDER ==================== */
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 24px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.auth-divider span {
+    padding: 0 16px;
+}
+
+/* ==================== PASSWORD STRENGTH ==================== */
+
+.password-strength-meter {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.password-strength-bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    transition: background 0.3s ease;
+}
+
+.password-strength-bar.active.weak {
+    background: var(--error);
+}
+
+.password-strength-bar.active.medium {
+    background: var(--warning);
+}
+
+.password-strength-bar.active.strong {
+    background: var(--success);
+}
+
+/* ==================== SCAN EFFECT ==================== */
+
+.scan-effect {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan-line 3s linear infinite;
+    opacity: 0.3;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 768px) {
+    .cyber-card {
+        padding: 16px !important;
+    }
+    
+    .stButton button {
+        padding: 12px 16px !important;
+        font-size: 12px !important;
+    }
+}
+
+/* ==================== UTILITY CLASSES ==================== */
+
+.animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+.animate-fade-in {
+    animation: fade-in-up 0.5s ease-out;
+}
+
+.animate-scale-in {
+    animation: scale-in 0.4s ease-out;
+}
+
+.text-accent {
+    color: var(--accent);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.border-accent {
+    border-color: var(--accent);
+}
+
+.bg-glass {
+    background: var(--bg-card);
+}
