@@ -1,0 +1,20 @@
+# Use a stable Debian base image to avoid the persistent Kali repository issues.
+FROM debian:stable-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update package lists and install essential reconnaissance tools.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        net-tools \
+        python3 \
+        python3-pip \
+        curl \
+        dnsutils \
+        whois \
+        iputils-ping \
+        nmap && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+CMD ["/bin/bash"]

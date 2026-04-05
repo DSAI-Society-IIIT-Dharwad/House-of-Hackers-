@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Victim 1: Damn Vulnerable Web Application (DVWA)
+  # ============================================
+  victim:
+    image: vulnerables/web-dvwa
+    container_name: decepticon-victim
+    networks:
+      - decepticon_lab_network
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/login.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # Victim 2: OWASP Juice Shop (Modern Vulnerabilities)
+  # ============================================
+  juice-shop:
+    image: bkimminich/juice-shop
+    container_name: decepticon-juice-shop
+    networks:
+      - decepticon_lab_network
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # Attacker: Kali Linux with Decepticon Integration
+  # ============================================
+  attacker:
+    image: kalilinux/kali-rolling
+    container_name: attacker
+    stdin_open: true
+    tty: true
+    networks:
+      - decepticon_lab_network
+    volumes:
+      - ./attacker_tools:/tools
+    command: /bin/bash -c "apt-get update && apt-get install -y nmap curl hydra && tail -f /dev/null"
+    restart: unless-stopped
+
+networks:
+  decepticon_lab_network:
+    driver: bridge

@@ -1,0 +1,182 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: decepticon-db
+    env_file:
+      - .env.production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-decepticon}
+      POSTGRES_USER: ${POSTGRES_USER:-decepticon_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - decepticon_network
+    ports:
+      - "127.0.0.1:5432:5432"  # Only expose locally
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-decepticon_user} -d ${POSTGRES_DB:-decepticon}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ============================================
+  # Decepticon Application
+  # ============================================
+  decepticon:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: decepticon-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-decepticon_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-decepticon}
+      DECEPTICON_ENV: production
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - decepticon_network
+    ports:
+      - "127.0.0.1:8501:8501"  # Only expose locally (Nginx will proxy)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # ============================================
+  # Nginx Reverse Proxy
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: decepticon-nginx
+    depends_on:
+      - decepticon
+    volumes:
+      - ./nginx/decepticon.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/logs:/var/log/nginx
+    networks:
+      - decepticon_network
+    ports:
+      - "80:80"
+      - "443:443"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # ============================================
+  # Kali Linux - Attacker Container (Pentesting)
+  # ============================================
+  kali:
+    build:
+      context: .
+      dockerfile: Dockerfile.attacker
+    container_name: attacker
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env.production
+    volumes:
+      - ./data:/root/data
+    networks:
+      - pentest_network
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # ============================================
+  # Metasploitable2 - Victim Container (Target)
+  # ============================================
+  metasploitable2:
+    image: tleemcjr/metasploitable2
+    container_name: victim
+    privileged: true
+    networks:
+      - pentest_network
+    restart: unless-stopped
+    command: /bin/bash -c "/bin/services.sh && bash"
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  decepticon_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  
+  pentest_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
