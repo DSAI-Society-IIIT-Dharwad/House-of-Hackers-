@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attack Path Graph</title>
+  <style>
+    :root {
+      --bg: #07111b;
+      --panel: rgba(10, 19, 31, 0.92);
+      --panel-soft: rgba(255,255,255,0.04);
+      --line: rgba(125,164,201,0.16);
+      --text: #eef5ff;
+      --muted: #93a7c1;
+      --source: #f59e0b;
+      --sink: #ef4444;
+      --cycle: #8b5cf6;
+      --critical: #fb923c;
+      --safe: #22c55e;
+      --cve: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: "Trebuchet MS", "Segoe UI", sans-serif; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(249,115,22,0.16), transparent 24%),
+        radial-gradient(circle at 82% 10%, rgba(94,234,212,0.10), transparent 18%),
+        linear-gradient(rgba(125,164,201,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(125,164,201,0.05) 1px, transparent 1px);
+      background-size: auto, auto, 34px 34px, 34px 34px;
+      pointer-events: none;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 320px minmax(640px, 1fr) 310px;
+      grid-template-rows: auto auto 1fr;
+      gap: 16px;
+      padding: 18px;
+      min-height: 100vh;
+    }
+    .panel {
+      background: linear-gradient(180deg, rgba(13,24,39,0.98), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.32);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .hero { grid-column: 1 / span 2; padding: 20px 22px; }
+    .summary { grid-column: 3; padding: 18px; }
+    .controls { grid-column: 1; grid-row: 2 / span 2; padding: 18px; }
+    .graph-panel { grid-column: 2; grid-row: 2 / span 2; padding: 14px; }
+    .inspector { grid-column: 3; grid-row: 2; padding: 18px; }
+    .critical { grid-column: 3; grid-row: 3; padding: 18px; align-self: start; }
+    .eyebrow, .label {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .eyebrow { color: var(--source); letter-spacing: 0.2em; font-size: 11px; }
+    h1, h2 { margin: 0; font-family: "Palatino Linotype", Georgia, serif; }
+    h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.05; max-width: 14ch; }
+    h2 { font-size: 22px; }
+    p { margin: 10px 0 0; color: var(--muted); line-height: 1.55; font-size: 14px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(94,234,212,0.3);
+      background: rgba(12,34,28,0.54);
+      color: #8ff1dc;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 16px currentColor;
+    }
+    .status[data-tone="warn"] {
+      border-color: rgba(245,158,11,0.28);
+      background: rgba(58,38,9,0.56);
+      color: #fbbf24;
+    }
+    .stats { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .stat, .focus, .legend, .select-wrap, .selected-card, .critical-item {
+      padding: 13px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(125,164,201,0.12);
+      background: var(--panel-soft);
+    }
+    .stat span { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+    .stat strong { display: block; margin-top: 7px; font-size: 24px; line-height: 1.1; }
+    .stat small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .buttons, .legend-grid, .critical-list { display: grid; gap: 10px; margin-top: 14px; }
+    .filter-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(125,164,201,0.16);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .filter-btn.active { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.14); }
+    .filter-btn:hover { border-color: rgba(245,158,11,0.4); }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .swatch { width: 16px; height: 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); flex: 0 0 16px; }
+    .swatch.source { background: var(--source); }
+    .swatch.sink { background: var(--sink); }
+    .swatch.critical { background: var(--critical); }
+    .swatch.cycle { background: var(--cycle); }
+    .swatch.safe { background: var(--safe); }
+    .swatch.cve { background: transparent; border: 2px solid var(--cve); box-shadow: 0 0 0 3px rgba(251,113,133,0.12); }
+    .select-wrap label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(125,164,201,0.18);
+      background: rgba(5,12,22,0.85);
+      color: var(--text);
+      font: inherit;
+    }
+    .graph-header { display: flex; justify-content: space-between; gap: 12px; padding: 4px 8px 14px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; justify-content: flex-end; }
+    .badge {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(125,164,201,0.12);
+      color: var(--text);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .graph-shell {
+      min-height: 760px;
+      border-radius: 22px;
+      border: 1px solid rgba(125,164,201,0.14);
+      background:
+        radial-gradient(circle at 24% 18%, rgba(249,115,22,0.08), transparent 24%),
+        radial-gradient(circle at 84% 12%, rgba(94,234,212,0.08), transparent 18%),
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      overflow: hidden;
+    }
+    svg { width: 100%; height: 100%; min-height: 760px; display: block; }
+    .lane { fill: rgba(10,27,43,0.55); stroke: rgba(125,164,201,0.12); stroke-width: 1; }
+    .lane-label { fill: rgba(238,245,255,0.92); font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .lane-subtitle { fill: rgba(147,167,193,0.84); font-size: 10px; letter-spacing: 0.04em; }
+    .edge { fill: none; stroke: rgba(147,167,193,0.27); stroke-width: 1.4px; transition: opacity 0.16s ease, stroke-width 0.16s ease; }
+    .edge.cve { stroke: var(--cve); }
+    .edge-label { fill: #ffd2dd; font-size: 10px; paint-order: stroke; stroke: rgba(7,17,27,0.96); stroke-width: 4px; pointer-events: none; }
+    .node { cursor: pointer; transition: opacity 0.16s ease; }
+    .node-core { stroke: rgba(255,255,255,0.2); stroke-width: 1.5px; transition: stroke-width 0.16s ease, r 0.16s ease; }
+    .node-core.tone-source { fill: var(--source); }
+    .node-core.tone-sink { fill: var(--sink); }
+    .node-core.tone-cycle { fill: var(--cycle); }
+    .node-core.tone-critical { fill: var(--critical); }
+    .node-core.tone-safe { fill: var(--safe); }
+    .node-ring { fill: none; stroke: rgba(251,113,133,0.92); stroke-width: 2px; opacity: 0; }
+    .node-ring.vuln { opacity: 1; animation: pulse 2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+    .node-label { fill: var(--text); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: rgba(7,17,27,0.98); stroke-width: 4px; pointer-events: none; }
+    .node-type { fill: rgba(147,167,193,0.86); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; paint-order: stroke; stroke: rgba(7,17,27,0.98); stroke-width: 4px; pointer-events: none; }
+    .selected-card dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 9px 12px; font-size: 13px; }
+    .selected-card dt { color: var(--muted); }
+    .selected-card dd { margin: 0; text-align: right; }
+    .critical-item strong { display: block; font-size: 14px; line-height: 1.35; }
+    .critical-item small { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .tooltip {
+      position: fixed;
+      min-width: 220px;
+      max-width: 280px;
+      padding: 13px 15px;
+      border-radius: 18px;
+      border: 1px solid rgba(245,158,11,0.26);
+      background: linear-gradient(180deg, rgba(13,24,39,0.98), rgba(7,17,27,0.96));
+      box-shadow: 0 18px 50px rgba(0,0,0,0.42);
+      font-size: 13px;
+      line-height: 1.45;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .tooltip[hidden] { display: none; }
+    .tooltip h3 { margin: 0 0 8px; font-size: 16px; }
+    .tooltip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
+    .tooltip dt { color: var(--muted); }
+    .tooltip dd { margin: 0; text-align: right; }
+    .tooltip .cves { margin-top: 10px; color: #ffd2dd; font-size: 12px; }
+    @keyframes pulse {
+      0% { stroke-width: 2px; stroke-opacity: 0.92; }
+      50% { stroke-width: 8px; stroke-opacity: 0.08; }
+      100% { stroke-width: 2px; stroke-opacity: 0.92; }
+    }
+    @media (max-width: 1320px) {
+      .app { grid-template-columns: 300px minmax(0,1fr); grid-template-rows: auto auto auto auto auto; }
+      .hero, .summary { grid-column: 1 / span 2; }
+      .controls { grid-column: 1; grid-row: 3; }
+      .graph-panel { grid-column: 2; grid-row: 3 / span 2; }
+      .inspector { grid-column: 1; grid-row: 4; }
+      .critical { grid-column: 1; grid-row: 5; }
+    }
+    @media (max-width: 960px) {
+      .app { display: block; padding: 14px; }
+      .panel { margin-bottom: 14px; }
+      .graph-shell, svg { min-height: 640px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="panel hero">
+      <p class="eyebrow">Judge-Ready Attack Graph</p>
+      <h1>Cluster attack paths, without demo roulette.</h1>
+      <p>Self-contained graph surface for <strong>mock-prod-cluster</strong>. It renders from the current dataset, highlights the shortest routes, shows blast radius and CVE exposure, and keeps working without a network call to fetch frontend libraries.</p>
+      <div class="status" data-tone="ok">Local renderer ready for offline judge demos</div>
+    </section>
+    <section class="panel summary">
+      <p class="label">Rubric Snapshot</p>
+      <div class="stats" id="stats"></div>
+    </section>
+    <section class="panel controls">
+      <div>
+        <p class="label">Scope</p>
+        <h2>Graph Filters</h2>
+        <p>Switch between the entire cluster, the lowest-cost routes, the three-hop blast radius, and explicitly CVE-tagged traversals.</p>
+        <div class="buttons" id="filterButtons"></div>
+      </div>
+      <div class="focus" id="focusCopy"></div>
+      <div class="select-wrap">
+        <label for="nodeSelect">Focus Node</label>
+        <select id="nodeSelect"><option value="">Select a node</option></select>
+      </div>
+      <div class="legend">
+        <p class="label">Legend</p>
+        <div class="legend-grid">
+          <div class="legend-item"><span class="swatch source"></span>Attack source</div>
+          <div class="legend-item"><span class="swatch sink"></span>High-value sink</div>
+          <div class="legend-item"><span class="swatch critical"></span>Top critical choke point</div>
+          <div class="legend-item"><span class="swatch cycle"></span>Cycle participant</div>
+          <div class="legend-item"><span class="swatch safe"></span>Support node</div>
+          <div class="legend-item"><span class="swatch cve"></span>Node or edge with CVE context</div>
+        </div>
+      </div>
+    </section>
+    <section class="panel graph-panel">
+      <div class="graph-header">
+        <div>
+          <p class="label">Current Dataset</p>
+          <h2>Attack Path Map</h2>
+          <p id="graphCopy"></p>
+        </div>
+        <div class="badges" id="graphBadges"></div>
+      </div>
+      <div class="graph-shell">
+        <svg id="graphSvg" viewBox="0 0 1580 920" aria-label="Attack path graph">
+          <defs>
+            <marker id="arrow" viewBox="0 -5 10 10" refX="22" refY="0" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M0,-4L10,0L0,4" fill="rgba(147,167,193,0.58)"></path>
+            </marker>
+            <marker id="arrow-cve" viewBox="0 -5 10 10" refX="22" refY="0" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M0,-4L10,0L0,4" fill="#fb7185"></path>
+            </marker>
+          </defs>
+          <g id="laneLayer"></g>
+          <g id="edgeLayer"></g>
+          <g id="edgeLabelLayer"></g>
+          <g id="nodeLayer"></g>
+        </svg>
+      </div>
+    </section>
+    <section class="panel inspector">
+      <p class="label">Inspector</p>
+      <h2 id="selectedTitle">No node selected</h2>
+      <p id="selectedCopy">Click any node to isolate its visible inbound and outbound relationships.</p>
+      <div class="selected-card" id="selectedCard"></div>
+    </section>
+    <section class="panel critical">
+      <p class="label">Top Choke Points</p>
+      <h2>Critical Nodes</h2>
+      <p>Removing or re-scoping these nodes collapses the largest number of source-to-sink attack paths in the mock cluster.</p>
+      <div class="critical-list" id="criticalList"></div>
+    </section>
+  </div>
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script>
+    const DATA = {"cluster_name": "mock-prod-cluster", "data_source_label": "Mock fixture", "graph_copy": "41 nodes, 48 directed relationships, 18 lowest-cost source-to-sink routes.", "badges": ["Mock fixture", "5 critical choke points ranked", "1 cycle(s) detected"], "default_filter": "all", "attack_path_count": 18, "critical_recommendation": {"node_id": "pod-webfront", "node_name": "web-frontend", "display": "web-frontend (pod-webfront)", "node_type": "Pod", "paths_eliminated": 32, "remaining_paths": 14, "source_distance": 1}, "critical_nodes": [{"node_id": "pod-webfront", "node_name": "web-frontend", "display": "web-frontend (pod-webfront)", "node_type": "Pod", "paths_eliminated": 32, "remaining_paths": 14, "source_distance": 1}, {"node_id": "pod-api", "node_name": "api-server", "display": "api-server (pod-api)", "node_type": "Pod", "paths_eliminated": 24, "remaining_paths": 22, "source_distance": 1}, {"node_id": "svc-internal-api", "node_name": "internal-api-svc", "display": "internal-api-svc (svc-internal-api)", "node_type": "Service", "paths_eliminated": 16, "remaining_paths": 30, "source_distance": 2}, {"node_id": "sa-worker", "node_name": "sa-worker", "display": "sa-worker (sa-worker)", "node_type": "ServiceAccount", "paths_eliminated": 14, "remaining_paths": 32, "source_distance": 2}, {"node_id": "role-pod-exec", "node_name": "pod-exec", "display": "pod-exec (role-pod-exec)", "node_type": "Role", "paths_eliminated": 14, "remaining_paths": 32, "source_distance": 3}], "stats": [{"label": "Graph", "value": "41 / 48", "detail": "nodes / directed edges"}, {"label": "Shortest Routes", "value": "18", "detail": "distinct lowest-cost source-to-sink paths"}, {"label": "Blast Radius", "value": "13", "detail": "three hops from pod-webfront"}, {"label": "Cycles", "value": "1", "detail": "HIGH - privilege escalation loop found"}, {"label": "Top Choke Point", "value": "web-frontend", "detail": "32 paths collapsed if removed"}, {"label": "CVE Edges", "value": "5", "detail": "explicitly annotated exploit traversals"}], "filters": {"all": {"label": "Full Cluster", "subtitle": "All assets and directed relationships", "description": "Showing the full graph so judges can see the whole cluster attack surface in one view.", "nodes": ["internet", "user-cicd", "user-dev1", "user-dev2", "pod-webfront", "lb-service", "pod-api", "svc-internal-api", "svc-service-a", "svc-service-b", "pod-sidecar", "pod-worker", "pod-logger", "pod-metrics", "pod-admission", "sa-cicd", "sa-default", "sa-webapp", "sa-worker", "sa-logger", "sa-monitor", "role-pod-exec", "role-secret-reader", "role-node-reader", "clusterrole-admin", "clusterrole-deploy", "clusterrole-view", "secret-cicd-token", "secret-db-creds", "secret-api-key", "secret-tls", "configmap-dburl", "configmap-env", "secret-admin-token", "ns-kube-system", "node-worker-1", "node-worker-2", "ns-default", "db-production", "db-analytics", "pvc-data"], "edges": ["internet->lb-service", "internet->pod-webfront", "user-dev1->pod-webfront", "user-dev1->pod-worker", "user-dev2->pod-logger", "user-cicd->sa-cicd", "pod-webfront->sa-webapp", "pod-webfront->sa-default", "pod-webfront->svc-internal-api", "pod-api->sa-worker", "pod-api->configmap-dburl", "pod-api->secret-api-key", "pod-worker->sa-worker", "pod-metrics->sa-monitor", "pod-logger->sa-logger", "pod-logger->configmap-env", "pod-admission->ns-kube-system", "pod-sidecar->sa-webapp", "sa-webapp->role-secret-reader", "sa-webapp->secret-tls", "sa-webapp->secret-api-key", "sa-worker->role-pod-exec", "sa-monitor->clusterrole-view", "sa-cicd->clusterrole-deploy", "sa-cicd->secret-cicd-token", "sa-logger->role-node-reader", "sa-default->clusterrole-admin", "sa-default->secret-db-creds", "role-secret-reader->secret-db-creds", "role-pod-exec->node-worker-1", "role-pod-exec->node-worker-2", "role-node-reader->node-worker-1", "clusterrole-admin->secret-admin-token", "clusterrole-admin->ns-default", "clusterrole-view->configmap-env", "clusterrole-deploy->secret-cicd-token", "secret-db-creds->db-production", "secret-api-key->db-analytics", "secret-admin-token->ns-kube-system", "secret-cicd-token->db-production", "configmap-dburl->db-analytics", "node-worker-1->pvc-data", "node-worker-2->ns-default", "lb-service->pod-api", "lb-service->pod-webfront", "svc-internal-api->pod-api", "svc-service-a->svc-service-b", "svc-service-b->svc-service-a"]}, "shortest": {"label": "Shortest Routes", "subtitle": "Lowest-cost source-to-sink paths", "description": "Showing only the cheapest source-to-sink paths, which is the fastest way to narrate realistic attack movement during a demo.", "nodes": ["clusterrole-admin", "configmap-dburl", "db-analytics", "db-production", "internet", "lb-service", "node-worker-1", "ns-kube-system", "pod-api", "pod-logger", "pod-webfront", "pod-worker", "pvc-data", "role-node-reader", "role-pod-exec", "role-secret-reader", "sa-cicd", "sa-default", "sa-logger", "sa-webapp", "sa-worker", "secret-admin-token", "secret-cicd-token", "secret-db-creds", "svc-internal-api", "user-cicd", "user-dev1", "user-dev2"], "edges": ["clusterrole-admin->secret-admin-token", "configmap-dburl->db-analytics", "internet->lb-service", "internet->pod-webfront", "lb-service->pod-api", "lb-service->pod-webfront", "node-worker-1->pvc-data", "pod-api->configmap-dburl", "pod-api->sa-worker", "pod-logger->sa-logger", "pod-webfront->sa-default", "pod-webfront->sa-webapp", "pod-webfront->svc-internal-api", "pod-worker->sa-worker", "role-node-reader->node-worker-1", "role-pod-exec->node-worker-1", "role-secret-reader->secret-db-creds", "sa-cicd->secret-cicd-token", "sa-default->clusterrole-admin", "sa-logger->role-node-reader", "sa-webapp->role-secret-reader", "sa-worker->role-pod-exec", "secret-admin-token->ns-kube-system", "secret-cicd-token->db-production", "secret-db-creds->db-production", "svc-internal-api->pod-api", "user-cicd->sa-cicd", "user-dev1->pod-webfront", "user-dev1->pod-worker", "user-dev2->pod-logger"]}, "blast": {"label": "Blast Radius", "subtitle": "Three hops from pod-webfront", "description": "Showing the three-hop blast radius from pod-webfront using the BFS layering used in the rubric checks.", "nodes": ["clusterrole-admin", "configmap-dburl", "db-analytics", "db-production", "ns-default", "ns-kube-system", "pod-api", "pod-webfront", "role-secret-reader", "sa-default", "sa-webapp", "sa-worker", "secret-admin-token", "secret-api-key", "secret-db-creds", "secret-tls", "svc-internal-api"], "edges": ["secret-admin-token->ns-kube-system", "secret-api-key->db-analytics", "secret-db-creds->db-production"]}, "cve": {"label": "CVE Exposure", "subtitle": "Exploit-tagged traversals only", "description": "Showing only the edges with explicit CVE context plus the directly exposed nodes they connect.", "nodes": ["internet", "node-worker-1", "pod-api", "pod-logger", "pod-webfront", "role-pod-exec", "sa-worker", "user-dev1", "user-dev2"], "edges": ["internet->pod-webfront", "pod-api->sa-worker", "role-pod-exec->node-worker-1", "user-dev1->pod-webfront", "user-dev2->pod-logger"]}}, "graph": {"nodes": [{"id": "internet", "type": "ExternalActor", "name": "internet", "namespace": "external", "risk_score": 10.0, "is_source": true, "is_sink": false, "cves": [], "lane": "entry", "x": 189.0, "y": 235.6, "tone": "source", "has_cves": false, "summary": "This node is marked as attack source, on a shortest route.", "in_degree": 0, "out_degree": 2}, {"id": "user-cicd", "type": "User", "name": "cicd-bot", "namespace": "ci", "risk_score": 6.0, "is_source": true, "is_sink": false, "cves": [], "lane": "entry", "x": 193.0, "y": 387.2, "tone": "source", "has_cves": false, "summary": "This node is marked as attack source, on a shortest route.", "in_degree": 0, "out_degree": 1}, {"id": "user-dev1", "type": "User", "name": "dev-1", "namespace": "default", "risk_score": 5.0, "is_source": true, "is_sink": false, "cves": [], "lane": "entry", "x": 197.0, "y": 538.8, "tone": "source", "has_cves": false, "summary": "This node is marked as attack source, on a shortest route.", "in_degree": 0, "out_degree": 2}, {"id": "user-dev2", "type": "User", "name": "dev-2", "namespace": "default", "risk_score": 5.0, "is_source": true, "is_sink": false, "cves": [], "lane": "entry", "x": 197.0, "y": 690.4, "tone": "source", "has_cves": false, "summary": "This node is marked as attack source, on a shortest route.", "in_degree": 0, "out_degree": 1}, {"id": "pod-webfront", "type": "Pod", "name": "web-frontend", "namespace": "default", "risk_score": 7.5, "is_source": false, "is_sink": false, "cves": ["CVE-2024-1234"], "lane": "edge", "x": 431.0, "y": 147.2, "tone": "critical", "has_cves": true, "summary": "This node is marked as CVE-linked, top choke point, on a shortest route, inside the 3-hop blast radius.", "in_degree": 3, "out_degree": 3}, {"id": "lb-service", "type": "Service", "name": "loadbalancer-svc", "namespace": "default", "risk_score": 6.5, "is_source": true, "is_sink": false, "cves": [], "lane": "edge", "x": 431.0, "y": 210.3, "tone": "source", "has_cves": false, "summary": "This node is marked as attack source, on a shortest route.", "in_degree": 1, "out_degree": 2}, {"id": "pod-api", "type": "Pod", "name": "api-server", "namespace": "default", "risk_score": 6.0, "is_source": false, "is_sink": false, "cves": ["CVE-2023-4567"], "lane": "edge", "x": 431.0, "y": 273.5, "tone": "critical", "has_cves": true, "summary": "This node is marked as CVE-linked, top choke point, on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 3}, {"id": "svc-internal-api", "type": "Service", "name": "internal-api-svc", "namespace": "default", "risk_score": 5.0, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 431.0, "y": 336.7, "tone": "critical", "has_cves": false, "summary": "This node is marked as top choke point, on a shortest route, inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 1}, {"id": "svc-service-a", "type": "Service", "name": "service-a", "namespace": "default", "risk_score": 5.0, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 431.0, "y": 399.8, "tone": "cycle", "has_cves": false, "summary": "This node is marked as cycle participant.", "in_degree": 1, "out_degree": 1}, {"id": "svc-service-b", "type": "Service", "name": "service-b", "namespace": "default", "risk_score": 5.0, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 431.0, "y": 463.0, "tone": "cycle", "has_cves": false, "summary": "This node is marked as cycle participant.", "in_degree": 1, "out_degree": 1}, {"id": "pod-sidecar", "type": "Pod", "name": "sidecar-proxy", "namespace": "default", "risk_score": 5.0, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 431.0, "y": 526.2, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 0, "out_degree": 1}, {"id": "pod-worker", "type": "Pod", "name": "background-worker", "namespace": "default", "risk_score": 4.0, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 431.0, "y": 589.3, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route.", "in_degree": 1, "out_degree": 1}, {"id": "pod-logger", "type": "Pod", "name": "log-aggregator", "namespace": "logging", "risk_score": 4.0, "is_source": false, "is_sink": false, "cves": ["CVE-2024-9999"], "lane": "edge", "x": 435.0, "y": 652.5, "tone": "safe", "has_cves": true, "summary": "This node is marked as CVE-linked, on a shortest route.", "in_degree": 1, "out_degree": 2}, {"id": "pod-metrics", "type": "Pod", "name": "metrics-collector", "namespace": "monitoring", "risk_score": 3.5, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 439.0, "y": 715.7, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 0, "out_degree": 1}, {"id": "pod-admission", "type": "Pod", "name": "admission-webhook", "namespace": "kube-system", "risk_score": 8.5, "is_source": false, "is_sink": false, "cves": [], "lane": "edge", "x": 447.0, "y": 778.8, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 0, "out_degree": 1}, {"id": "sa-cicd", "type": "ServiceAccount", "name": "sa-cicd", "namespace": "ci", "risk_score": 8.0, "is_source": false, "is_sink": false, "cves": [], "lane": "identity", "x": 661.0, "y": 192.3, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route.", "in_degree": 1, "out_degree": 2}, {"id": "sa-default", "type": "ServiceAccount", "name": "default", "namespace": "default", "risk_score": 6.0, "is_source": false, "is_sink": false, "cves": [], "lane": "identity", "x": 665.0, "y": 300.6, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 2}, {"id": "sa-webapp", "type": "ServiceAccount", "name": "sa-webapp", "namespace": "default", "risk_score": 5.5, "is_source": false, "is_sink": false, "cves": [], "lane": "identity", "x": 665.0, "y": 408.9, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 3}, {"id": "sa-worker", "type": "ServiceAccount", "name": "sa-worker", "namespace": "default", "risk_score": 4.5, "is_source": false, "is_sink": false, "cves": [], "lane": "identity", "x": 665.0, "y": 517.1, "tone": "critical", "has_cves": false, "summary": "This node is marked as top choke point, on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 1}, {"id": "sa-logger", "type": "ServiceAccount", "name": "sa-logger", "namespace": "logging", "risk_score": 4.0, "is_source": false, "is_sink": false, "cves": [], "lane": "identity", "x": 669.0, "y": 625.4, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route.", "in_degree": 1, "out_degree": 1}, {"id": "sa-monitor", "type": "ServiceAccount", "name": "sa-monitor", "namespace": "monitoring", "risk_score": 3.0, "is_source": false, "is_sink": false, "cves": [], "lane": "identity", "x": 673.0, "y": 733.7, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 1, "out_degree": 1}, {"id": "role-pod-exec", "type": "Role", "name": "pod-exec", "namespace": "default", "risk_score": 8.5, "is_source": false, "is_sink": false, "cves": [], "lane": "privilege", "x": 899.0, "y": 192.3, "tone": "critical", "has_cves": false, "summary": "This node is marked as top choke point, on a shortest route.", "in_degree": 1, "out_degree": 2}, {"id": "role-secret-reader", "type": "Role", "name": "secret-reader", "namespace": "default", "risk_score": 7.0, "is_source": false, "is_sink": false, "cves": [], "lane": "privilege", "x": 899.0, "y": 300.6, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 1}, {"id": "role-node-reader", "type": "Role", "name": "node-reader", "namespace": "default", "risk_score": 4.0, "is_source": false, "is_sink": false, "cves": [], "lane": "privilege", "x": 899.0, "y": 408.9, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route.", "in_degree": 1, "out_degree": 1}, {"id": "clusterrole-admin", "type": "ClusterRole", "name": "cluster-admin", "namespace": "cluster", "risk_score": 10.0, "is_source": false, "is_sink": false, "cves": [], "lane": "privilege", "x": 911.0, "y": 517.1, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 2}, {"id": "clusterrole-deploy", "type": "ClusterRole", "name": "deployer", "namespace": "cluster", "risk_score": 7.5, "is_source": false, "is_sink": false, "cves": [], "lane": "privilege", "x": 911.0, "y": 625.4, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 1, "out_degree": 1}, {"id": "clusterrole-view", "type": "ClusterRole", "name": "cluster-viewer", "namespace": "cluster", "risk_score": 2.0, "is_source": false, "is_sink": false, "cves": [], "lane": "privilege", "x": 911.0, "y": 733.7, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 1, "out_degree": 1}, {"id": "secret-cicd-token", "type": "Secret", "name": "cicd-deploy-token", "namespace": "ci", "risk_score": 8.5, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1129.0, "y": 178.8, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route.", "in_degree": 2, "out_degree": 1}, {"id": "secret-db-creds", "type": "Secret", "name": "db-credentials", "namespace": "default", "risk_score": 9.5, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1133.0, "y": 273.5, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 1}, {"id": "secret-api-key", "type": "Secret", "name": "api-key", "namespace": "default", "risk_score": 8.0, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1133.0, "y": 368.2, "tone": "safe", "has_cves": false, "summary": "This node is marked as inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 1}, {"id": "secret-tls", "type": "Secret", "name": "tls-cert", "namespace": "default", "risk_score": 6.0, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1133.0, "y": 463.0, "tone": "safe", "has_cves": false, "summary": "This node is marked as inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 0}, {"id": "configmap-dburl", "type": "ConfigMap", "name": "db-url-config", "namespace": "default", "risk_score": 5.5, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1133.0, "y": 557.8, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 1}, {"id": "configmap-env", "type": "ConfigMap", "name": "app-env-config", "namespace": "default", "risk_score": 3.0, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1133.0, "y": 652.5, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 2, "out_degree": 0}, {"id": "secret-admin-token", "type": "Secret", "name": "admin-token", "namespace": "kube-system", "risk_score": 10.0, "is_source": false, "is_sink": false, "cves": [], "lane": "data", "x": 1149.0, "y": 747.2, "tone": "safe", "has_cves": false, "summary": "This node is marked as on a shortest route, inside the 3-hop blast radius.", "in_degree": 1, "out_degree": 1}, {"id": "ns-kube-system", "type": "Namespace", "name": "kube-system", "namespace": "cluster", "risk_score": 9.0, "is_source": false, "is_sink": true, "cves": [], "lane": "impact", "x": 1379.0, "y": 178.8, "tone": "sink", "has_cves": false, "summary": "This node is marked as high-value sink, on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 0}, {"id": "node-worker-1", "type": "Node", "name": "worker-node-1", "namespace": "cluster", "risk_score": 9.0, "is_source": false, "is_sink": true, "cves": ["CVE-2024-3116"], "lane": "impact", "x": 1379.0, "y": 273.5, "tone": "sink", "has_cves": true, "summary": "This node is marked as high-value sink, CVE-linked, on a shortest route.", "in_degree": 2, "out_degree": 1}, {"id": "node-worker-2", "type": "Node", "name": "worker-node-2", "namespace": "cluster", "risk_score": 9.0, "is_source": false, "is_sink": false, "cves": [], "lane": "impact", "x": 1379.0, "y": 368.2, "tone": "safe", "has_cves": false, "summary": "Support node in the wider cluster attack graph.", "in_degree": 1, "out_degree": 1}, {"id": "ns-default", "type": "Namespace", "name": "default", "namespace": "cluster", "risk_score": 4.0, "is_source": false, "is_sink": false, "cves": [], "lane": "impact", "x": 1379.0, "y": 463.0, "tone": "safe", "has_cves": false, "summary": "This node is marked as inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 0}, {"id": "db-production", "type": "Database", "name": "production-db", "namespace": "data", "risk_score": 10.0, "is_source": false, "is_sink": true, "cves": [], "lane": "impact", "x": 1387.0, "y": 557.8, "tone": "sink", "has_cves": false, "summary": "This node is marked as high-value sink, on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 0}, {"id": "db-analytics", "type": "Database", "name": "analytics-db", "namespace": "data", "risk_score": 7.0, "is_source": false, "is_sink": true, "cves": [], "lane": "impact", "x": 1387.0, "y": 652.5, "tone": "sink", "has_cves": false, "summary": "This node is marked as high-value sink, on a shortest route, inside the 3-hop blast radius.", "in_degree": 2, "out_degree": 0}, {"id": "pvc-data", "type": "PersistentVolume", "name": "data-pvc", "namespace": "data", "risk_score": 7.0, "is_source": false, "is_sink": true, "cves": [], "lane": "impact", "x": 1387.0, "y": 747.2, "tone": "sink", "has_cves": false, "summary": "This node is marked as high-value sink, on a shortest route.", "in_degree": 1, "out_degree": 0}], "edges": [{"source": "internet", "target": "lb-service", "relationship": "reaches", "weight": 2.0, "cve": null, "cvss": null, "key": "internet->lb-service", "edge_id": "edge-0", "bidirectional": false}, {"source": "internet", "target": "pod-webfront", "relationship": "reaches", "weight": 4.0, "cve": "CVE-2024-1234", "cvss": 8.1, "key": "internet->pod-webfront", "edge_id": "edge-1", "bidirectional": false}, {"source": "user-dev1", "target": "pod-webfront", "relationship": "can-exec", "weight": 5.0, "cve": "CVE-2024-1234", "cvss": 8.1, "key": "user-dev1->pod-webfront", "edge_id": "edge-2", "bidirectional": false}, {"source": "user-dev1", "target": "pod-worker", "relationship": "can-exec", "weight": 3.0, "cve": null, "cvss": null, "key": "user-dev1->pod-worker", "edge_id": "edge-3", "bidirectional": false}, {"source": "user-dev2", "target": "pod-logger", "relationship": "can-exec", "weight": 4.0, "cve": "CVE-2024-9999", "cvss": 6.5, "key": "user-dev2->pod-logger", "edge_id": "edge-4", "bidirectional": false}, {"source": "user-cicd", "target": "sa-cicd", "relationship": "impersonates", "weight": 4.0, "cve": null, "cvss": null, "key": "user-cicd->sa-cicd", "edge_id": "edge-5", "bidirectional": false}, {"source": "pod-webfront", "target": "sa-webapp", "relationship": "uses", "weight": 3.0, "cve": null, "cvss": null, "key": "pod-webfront->sa-webapp", "edge_id": "edge-6", "bidirectional": false}, {"source": "pod-webfront", "target": "sa-default", "relationship": "falls-back-to", "weight": 6.0, "cve": null, "cvss": null, "key": "pod-webfront->sa-default", "edge_id": "edge-7", "bidirectional": false}, {"source": "pod-webfront", "target": "svc-internal-api", "relationship": "calls", "weight": 2.0, "cve": null, "cvss": null, "key": "pod-webfront->svc-internal-api", "edge_id": "edge-8", "bidirectional": false}, {"source": "pod-api", "target": "sa-worker", "relationship": "uses", "weight": 3.5, "cve": "CVE-2023-4567", "cvss": 7.2, "key": "pod-api->sa-worker", "edge_id": "edge-9", "bidirectional": false}, {"source": "pod-api", "target": "configmap-dburl", "relationship": "reads", "weight": 2.5, "cve": null, "cvss": null, "key": "pod-api->configmap-dburl", "edge_id": "edge-10", "bidirectional": false}, {"source": "pod-api", "target": "secret-api-key", "relationship": "mounts", "weight": 3.0, "cve": null, "cvss": null, "key": "pod-api->secret-api-key", "edge_id": "edge-11", "bidirectional": false}, {"source": "pod-worker", "target": "sa-worker", "relationship": "uses", "weight": 2.0, "cve": null, "cvss": null, "key": "pod-worker->sa-worker", "edge_id": "edge-12", "bidirectional": false}, {"source": "pod-metrics", "target": "sa-monitor", "relationship": "uses", "weight": 2.0, "cve": null, "cvss": null, "key": "pod-metrics->sa-monitor", "edge_id": "edge-13", "bidirectional": false}, {"source": "pod-logger", "target": "sa-logger", "relationship": "uses", "weight": 3.0, "cve": null, "cvss": null, "key": "pod-logger->sa-logger", "edge_id": "edge-14", "bidirectional": false}, {"source": "pod-logger", "target": "configmap-env", "relationship": "reads", "weight": 1.5, "cve": null, "cvss": null, "key": "pod-logger->configmap-env", "edge_id": "edge-15", "bidirectional": false}, {"source": "pod-admission", "target": "ns-kube-system", "relationship": "deployed-in", "weight": 3.0, "cve": null, "cvss": null, "key": "pod-admission->ns-kube-system", "edge_id": "edge-16", "bidirectional": false}, {"source": "pod-sidecar", "target": "sa-webapp", "relationship": "uses", "weight": 2.5, "cve": null, "cvss": null, "key": "pod-sidecar->sa-webapp", "edge_id": "edge-17", "bidirectional": false}, {"source": "sa-webapp", "target": "role-secret-reader", "relationship": "bound-to", "weight": 4.0, "cve": null, "cvss": null, "key": "sa-webapp->role-secret-reader", "edge_id": "edge-18", "bidirectional": false}, {"source": "sa-webapp", "target": "secret-tls", "relationship": "can-read", "weight": 2.0, "cve": null, "cvss": null, "key": "sa-webapp->secret-tls", "edge_id": "edge-19", "bidirectional": false}, {"source": "sa-webapp", "target": "secret-api-key", "relationship": "can-read", "weight": 4.0, "cve": null, "cvss": null, "key": "sa-webapp->secret-api-key", "edge_id": "edge-20", "bidirectional": false}, {"source": "sa-worker", "target": "role-pod-exec", "relationship": "bound-to", "weight": 5.0, "cve": null, "cvss": null, "key": "sa-worker->role-pod-exec", "edge_id": "edge-21", "bidirectional": false}, {"source": "sa-monitor", "target": "clusterrole-view", "relationship": "bound-to", "weight": 1.5, "cve": null, "cvss": null, "key": "sa-monitor->clusterrole-view", "edge_id": "edge-22", "bidirectional": false}, {"source": "sa-cicd", "target": "clusterrole-deploy", "relationship": "bound-to", "weight": 5.0, "cve": null, "cvss": null, "key": "sa-cicd->clusterrole-deploy", "edge_id": "edge-23", "bidirectional": false}, {"source": "sa-cicd", "target": "secret-cicd-token", "relationship": "can-read", "weight": 3.0, "cve": null, "cvss": null, "key": "sa-cicd->secret-cicd-token", "edge_id": "edge-24", "bidirectional": false}, {"source": "sa-logger", "target": "role-node-reader", "relationship": "bound-to", "weight": 3.5, "cve": null, "cvss": null, "key": "sa-logger->role-node-reader", "edge_id": "edge-25", "bidirectional": false}, {"source": "sa-default", "target": "clusterrole-admin", "relationship": "bound-to", "weight": 8.0, "cve": null, "cvss": null, "key": "sa-default->clusterrole-admin", "edge_id": "edge-26", "bidirectional": false}, {"source": "sa-default", "target": "secret-db-creds", "relationship": "can-read", "weight": 7.0, "cve": null, "cvss": null, "key": "sa-default->secret-db-creds", "edge_id": "edge-27", "bidirectional": false}, {"source": "role-secret-reader", "target": "secret-db-creds", "relationship": "can-read", "weight": 5.5, "cve": null, "cvss": null, "key": "role-secret-reader->secret-db-creds", "edge_id": "edge-28", "bidirectional": false}, {"source": "role-pod-exec", "target": "node-worker-1", "relationship": "can-exec-on", "weight": 7.0, "cve": "CVE-2024-3116", "cvss": 9.0, "key": "role-pod-exec->node-worker-1", "edge_id": "edge-29", "bidirectional": false}, {"source": "role-pod-exec", "target": "node-worker-2", "relationship": "can-exec-on", "weight": 7.0, "cve": null, "cvss": null, "key": "role-pod-exec->node-worker-2", "edge_id": "edge-30", "bidirectional": false}, {"source": "role-node-reader", "target": "node-worker-1", "relationship": "can-read", "weight": 4.5, "cve": null, "cvss": null, "key": "role-node-reader->node-worker-1", "edge_id": "edge-31", "bidirectional": false}, {"source": "clusterrole-admin", "target": "secret-admin-token", "relationship": "can-read", "weight": 5.0, "cve": null, "cvss": null, "key": "clusterrole-admin->secret-admin-token", "edge_id": "edge-32", "bidirectional": false}, {"source": "clusterrole-admin", "target": "ns-default", "relationship": "admin-over", "weight": 6.0, "cve": null, "cvss": null, "key": "clusterrole-admin->ns-default", "edge_id": "edge-33", "bidirectional": false}, {"source": "clusterrole-view", "target": "configmap-env", "relationship": "can-read", "weight": 1.0, "cve": null, "cvss": null, "key": "clusterrole-view->configmap-env", "edge_id": "edge-34", "bidirectional": false}, {"source": "clusterrole-deploy", "target": "secret-cicd-token", "relationship": "can-read", "weight": 4.5, "cve": null, "cvss": null, "key": "clusterrole-deploy->secret-cicd-token", "edge_id": "edge-35", "bidirectional": false}, {"source": "secret-db-creds", "target": "db-production", "relationship": "grants-access-to", "weight": 6.6, "cve": null, "cvss": null, "key": "secret-db-creds->db-production", "edge_id": "edge-36", "bidirectional": false}, {"source": "secret-api-key", "target": "db-analytics", "relationship": "grants-access-to", "weight": 5.0, "cve": null, "cvss": null, "key": "secret-api-key->db-analytics", "edge_id": "edge-37", "bidirectional": false}, {"source": "secret-admin-token", "target": "ns-kube-system", "relationship": "grants-access-to", "weight": 9.0, "cve": null, "cvss": null, "key": "secret-admin-token->ns-kube-system", "edge_id": "edge-38", "bidirectional": false}, {"source": "secret-cicd-token", "target": "db-production", "relationship": "grants-access-to", "weight": 7.0, "cve": null, "cvss": null, "key": "secret-cicd-token->db-production", "edge_id": "edge-39", "bidirectional": false}, {"source": "configmap-dburl", "target": "db-analytics", "relationship": "exposes-endpoint", "weight": 4.0, "cve": null, "cvss": null, "key": "configmap-dburl->db-analytics", "edge_id": "edge-40", "bidirectional": false}, {"source": "node-worker-1", "target": "pvc-data", "relationship": "mounts", "weight": 5.0, "cve": null, "cvss": null, "key": "node-worker-1->pvc-data", "edge_id": "edge-41", "bidirectional": false}, {"source": "node-worker-2", "target": "ns-default", "relationship": "hosts", "weight": 1.0, "cve": null, "cvss": null, "key": "node-worker-2->ns-default", "edge_id": "edge-42", "bidirectional": false}, {"source": "lb-service", "target": "pod-api", "relationship": "routes-to", "weight": 3.0, "cve": null, "cvss": null, "key": "lb-service->pod-api", "edge_id": "edge-43", "bidirectional": false}, {"source": "lb-service", "target": "pod-webfront", "relationship": "routes-to", "weight": 3.0, "cve": null, "cvss": null, "key": "lb-service->pod-webfront", "edge_id": "edge-44", "bidirectional": false}, {"source": "svc-internal-api", "target": "pod-api", "relationship": "routes-to", "weight": 2.0, "cve": null, "cvss": null, "key": "svc-internal-api->pod-api", "edge_id": "edge-45", "bidirectional": false}, {"source": "svc-service-a", "target": "svc-service-b", "relationship": "admin-grant", "weight": 5.0, "cve": null, "cvss": null, "key": "svc-service-a->svc-service-b", "edge_id": "edge-46", "bidirectional": true}, {"source": "svc-service-b", "target": "svc-service-a", "relationship": "admin-grant", "weight": 5.0, "cve": null, "cvss": null, "key": "svc-service-b->svc-service-a", "edge_id": "edge-47", "bidirectional": true}], "lanes": [{"id": "entry", "label": "Entry", "subtitle": "internet + users", "x": 96.0, "y": 18, "width": 218.0, "height": 884}, {"id": "edge", "label": "Workloads", "subtitle": "services + pods", "x": 330.0, "y": 18, "width": 218.0, "height": 884}, {"id": "identity", "label": "Identity", "subtitle": "service accounts", "x": 564.0, "y": 18, "width": 218.0, "height": 884}, {"id": "privilege", "label": "Privileges", "subtitle": "roles + bindings", "x": 798.0, "y": 18, "width": 218.0, "height": 884}, {"id": "data", "label": "Exposure", "subtitle": "secrets + config", "x": 1032.0, "y": 18, "width": 218.0, "height": 884}, {"id": "impact", "label": "Impact", "subtitle": "targets + storage", "x": 1266.0, "y": 18, "width": 218.0, "height": 884}]}};
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.getElementById("graphSvg");
+    const laneLayer = document.getElementById("laneLayer");
+    const edgeLayer = document.getElementById("edgeLayer");
+    const edgeLabelLayer = document.getElementById("edgeLabelLayer");
+    const nodeLayer = document.getElementById("nodeLayer");
+    const statsEl = document.getElementById("stats");
+    const focusEl = document.getElementById("focusCopy");
+    const graphCopyEl = document.getElementById("graphCopy");
+    const graphBadgesEl = document.getElementById("graphBadges");
+    const filterButtonsEl = document.getElementById("filterButtons");
+    const selectedTitleEl = document.getElementById("selectedTitle");
+    const selectedCopyEl = document.getElementById("selectedCopy");
+    const selectedCardEl = document.getElementById("selectedCard");
+    const criticalListEl = document.getElementById("criticalList");
+    const tooltipEl = document.getElementById("tooltip");
+    const nodeSelectEl = document.getElementById("nodeSelect");
+    const nodes = DATA.graph.nodes.map((node) => ({ ...node }));
+    const edges = DATA.graph.edges.map((edge) => ({ ...edge }));
+    const filters = Object.fromEntries(Object.entries(DATA.filters).map(([key, value]) => [key, { ...value, nodes: new Set(value.nodes), edges: new Set(value.edges) }]));
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+    function createSvg(tag, attrs = {}, parent = null) {
+      const el = document.createElementNS(NS, tag);
+      for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+      if (parent) parent.appendChild(el);
+      return el;
+    }
+    function addText(parent, attrs, lines) {
+      const text = createSvg("text", attrs, parent);
+      lines.forEach((line, index) => {
+        const tspan = createSvg("tspan", { x: attrs.x, dy: index === 0 ? 0 : 13 }, text);
+        tspan.textContent = line;
+      });
+      return text;
+    }
+    function esc(value) {
+      return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+    }
+    function radius(node) {
+      if (node.is_sink) return 12.5;
+      if (node.is_source) return 11.5;
+      if (node.tone === "critical" || node.tone === "cycle") return 10.5;
+      return 9.5;
+    }
+    function curveOffset(edge) {
+      return edge.bidirectional ? (edge.source < edge.target ? 28 : -28) : 0;
+    }
+    function edgePath(edge) {
+      const source = nodeById.get(edge.source);
+      const target = nodeById.get(edge.target);
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const bend = curveOffset(edge);
+      const sx = source.x + (dx / dist) * radius(source);
+      const sy = source.y + (dy / dist) * radius(source);
+      const tx = target.x - (dx / dist) * (radius(target) + 12);
+      const ty = target.y - (dy / dist) * (radius(target) + 12);
+      if (!bend) return `M${sx},${sy} L${tx},${ty}`;
+      const mx = (sx + tx) / 2;
+      const my = (sy + ty) / 2;
+      const nx = (-dy / dist) * bend;
+      const ny = (dx / dist) * bend;
+      return `M${sx},${sy} Q${mx + nx},${my + ny} ${tx},${ty}`;
+    }
+    function edgeLabelPosition(edge) {
+      const source = nodeById.get(edge.source);
+      const target = nodeById.get(edge.target);
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const bend = curveOffset(edge);
+      const mx = (source.x + target.x) / 2;
+      const my = (source.y + target.y) / 2;
+      if (!bend) return [mx, my - 7];
+      return [mx + (-dy / dist) * bend * 0.55, my + (dx / dist) * bend * 0.55 - 8];
+    }
+    function renderLanes() {
+      for (const lane of DATA.graph.lanes) {
+        createSvg("rect", { class: "lane", x: lane.x, y: lane.y, rx: 22, ry: 22, width: lane.width, height: lane.height }, laneLayer);
+        createSvg("text", { class: "lane-label", x: lane.x + 18, y: lane.y + 26 }, laneLayer).textContent = lane.label;
+        createSvg("text", { class: "lane-subtitle", x: lane.x + 18, y: lane.y + 42 }, laneLayer).textContent = lane.subtitle;
+      }
+    }
+    function renderEdges() {
+      for (const edge of edges) {
+        edge.pathEl = createSvg("path", { class: `edge${edge.cve ? " cve" : ""}`, d: edgePath(edge), "marker-end": `url(#${edge.cve ? "arrow-cve" : "arrow"})` }, edgeLayer);
+        if (edge.cve) {
+          const [x, y] = edgeLabelPosition(edge);
+          edge.labelEl = createSvg("text", { class: "edge-label", x, y }, edgeLabelLayer);
+          edge.labelEl.textContent = edge.cvss ? `${edge.cve} | CVSS ${Number(edge.cvss).toFixed(1)}` : edge.cve;
+        }
+      }
+    }
+    function renderNodes() {
+      for (const node of nodes) {
+        const group = createSvg("g", { class: "node" }, nodeLayer);
+        node.groupEl = group;
+        node.coreEl = createSvg("circle", { class: `node-core tone-${node.tone}`, cx: node.x, cy: node.y, r: radius(node) }, group);
+        createSvg("circle", { class: `node-ring${node.has_cves ? " vuln" : ""}`, cx: node.x, cy: node.y, r: radius(node) + 5 }, group);
+        addText(group, { class: "node-label", x: node.x + 15, y: node.y - 2 }, [node.name]);
+        addText(group, { class: "node-type", x: node.x + 15, y: node.y + 12 }, [node.type]);
+        group.addEventListener("mouseenter", (event) => showTooltip(event, node));
+        group.addEventListener("mousemove", moveTooltip);
+        group.addEventListener("mouseleave", hideTooltip);
+        group.addEventListener("click", (event) => { event.stopPropagation(); toggleSelection(node.id); });
+      }
+    }
+    function renderStats() {
+      statsEl.innerHTML = DATA.stats.map((stat) => `<div class="stat"><span>${esc(stat.label)}</span><strong>${esc(stat.value)}</strong><small>${esc(stat.detail)}</small></div>`).join("");
+    }
+    function renderBadges() {
+      graphBadgesEl.innerHTML = DATA.badges.map((badge) => `<span class="badge">${esc(badge)}</span>`).join("");
+      graphCopyEl.textContent = DATA.graph_copy;
+    }
+    function renderFilters() {
+      filterButtonsEl.innerHTML = "";
+      for (const [key, filter] of Object.entries(DATA.filters)) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "filter-btn";
+        button.dataset.filter = key;
+        button.innerHTML = `<strong>${esc(filter.label)}</strong><br><span style="color: var(--muted); font-size: 12px;">${esc(filter.subtitle)}</span>`;
+        button.addEventListener("click", () => setFilter(key));
+        filterButtonsEl.appendChild(button);
+      }
+    }
+    function renderNodeOptions() {
+      [...nodes].sort((left, right) => left.name.localeCompare(right.name)).forEach((node) => {
+        const option = document.createElement("option");
+        option.value = node.id;
+        option.textContent = `${node.name} (${node.id})`;
+        nodeSelectEl.appendChild(option);
+      });
+      nodeSelectEl.addEventListener("change", () => { selectedId = nodeSelectEl.value || null; renderSelection(); paint(); });
+    }
+    function renderCriticalList() {
+      criticalListEl.innerHTML = DATA.critical_nodes.map((node, index) => `<div class="critical-item"><strong>${index + 1}. ${esc(node.display)}</strong><small>${esc(node.node_type)} | removes ${esc(node.paths_eliminated)} source-to-sink paths</small></div>`).join("");
+    }
+    function showTooltip(event, node) {
+      tooltipEl.hidden = false;
+      tooltipEl.innerHTML = `<h3>${esc(node.name)}</h3><dl><dt>ID</dt><dd>${esc(node.id)}</dd><dt>Type</dt><dd>${esc(node.type)}</dd><dt>Namespace</dt><dd>${esc(node.namespace)}</dd><dt>Risk</dt><dd>${Number(node.risk_score).toFixed(1)}</dd><dt>Outgoing</dt><dd>${node.out_degree}</dd><dt>Incoming</dt><dd>${node.in_degree}</dd></dl><div class="cves"><strong>CVEs:</strong> ${node.cves.length ? esc(node.cves.join(", ")) : "None"}</div>`;
+      moveTooltip(event);
+    }
+    function moveTooltip(event) {
+      tooltipEl.style.left = `${Math.min(event.clientX + 18, window.innerWidth - 300)}px`;
+      tooltipEl.style.top = `${Math.min(event.clientY + 18, window.innerHeight - 180)}px`;
+    }
+    function hideTooltip() { tooltipEl.hidden = true; }
+    function visibleNodeIds() { return filters[currentFilter].nodes; }
+    function visibleEdgeKeys() { return filters[currentFilter].edges; }
+    function selectionNeighborhood() {
+      const result = { nodes: new Set(), edges: new Set() };
+      if (!selectedId) return result;
+      for (const edge of edges) {
+        if (!visibleEdgeKeys().has(edge.key)) continue;
+        if (edge.source === selectedId || edge.target === selectedId) {
+          result.nodes.add(edge.source);
+          result.nodes.add(edge.target);
+          result.edges.add(edge.key);
+        }
+      }
+      return result;
+    }
+    function renderSelection() {
+      if (!selectedId) {
+        selectedTitleEl.textContent = "No node selected";
+        selectedCopyEl.textContent = "Click any node to isolate its visible inbound and outbound relationships.";
+        selectedCardEl.innerHTML = `<dl><dt>Cluster</dt><dd>${esc(DATA.cluster_name)}</dd><dt>Data Source</dt><dd>${esc(DATA.data_source_label)}</dd><dt>Attack Paths</dt><dd>${DATA.attack_path_count}</dd><dt>Critical Node</dt><dd>${esc(DATA.critical_recommendation.display)}</dd></dl>`;
+        nodeSelectEl.value = "";
+        return;
+      }
+      const node = nodeById.get(selectedId);
+      const neighbors = new Set();
+      for (const edge of edges) {
+        if (!visibleEdgeKeys().has(edge.key)) continue;
+        if (edge.source === selectedId) neighbors.add(edge.target);
+        if (edge.target === selectedId) neighbors.add(edge.source);
+      }
+      selectedTitleEl.textContent = node.name;
+      selectedCopyEl.textContent = node.summary;
+      selectedCardEl.innerHTML = `<dl><dt>ID</dt><dd>${esc(node.id)}</dd><dt>Type</dt><dd>${esc(node.type)}</dd><dt>Namespace</dt><dd>${esc(node.namespace)}</dd><dt>Risk Score</dt><dd>${Number(node.risk_score).toFixed(1)}</dd><dt>Direct Neighbors</dt><dd>${neighbors.size}</dd><dt>Outgoing</dt><dd>${node.out_degree}</dd><dt>Incoming</dt><dd>${node.in_degree}</dd><dt>CVEs</dt><dd>${node.cves.length ? esc(node.cves.join(", ")) : "None"}</dd></dl>`;
+      nodeSelectEl.value = selectedId;
+    }
+    function paint() {
+      const visibleNodes = visibleNodeIds();
+      const visibleEdges = visibleEdgeKeys();
+      const hood = selectionNeighborhood();
+      focusEl.textContent = filters[currentFilter].description;
+      document.querySelectorAll(".filter-btn").forEach((button) => button.classList.toggle("active", button.dataset.filter === currentFilter));
+      for (const edge of edges) {
+        const visible = visibleEdges.has(edge.key);
+        const emphasized = !selectedId || hood.edges.has(edge.key);
+        edge.pathEl.style.opacity = !visible ? 0.04 : emphasized ? (edge.cve ? 0.98 : 0.6) : 0.08;
+        edge.pathEl.style.strokeWidth = selectedId && hood.edges.has(edge.key) ? (edge.cve ? 3.5 : 2.8) : (edge.cve ? 2.2 : 1.4);
+        if (edge.labelEl) edge.labelEl.style.opacity = !visible ? 0 : emphasized ? 0.98 : 0.06;
+      }
+      for (const node of nodes) {
+        const visible = visibleNodes.has(node.id);
+        const emphasized = !selectedId || node.id === selectedId || hood.nodes.has(node.id);
+        node.groupEl.style.opacity = !visible ? 0.06 : emphasized ? 1 : 0.18;
+        node.groupEl.style.pointerEvents = visible ? "auto" : "none";
+        node.coreEl.setAttribute("stroke-width", selectedId === node.id ? "3.1" : "1.5");
+        node.coreEl.setAttribute("r", String(selectedId === node.id ? radius(node) + 2.4 : radius(node)));
+      }
+    }
+    function toggleSelection(nodeId) {
+      selectedId = selectedId === nodeId ? null : nodeId;
+      renderSelection();
+      paint();
+    }
+    function setFilter(filterId) {
+      currentFilter = filterId;
+      if (selectedId && !visibleNodeIds().has(selectedId)) selectedId = null;
+      renderSelection();
+      paint();
+    }
+    let currentFilter = DATA.default_filter;
+    let selectedId = null;
+    renderLanes();
+    renderEdges();
+    renderNodes();
+    renderStats();
+    renderBadges();
+    renderFilters();
+    renderNodeOptions();
+    renderCriticalList();
+    renderSelection();
+    paint();
+    svg.addEventListener("click", () => { selectedId = null; renderSelection(); paint(); });
+  </script>
+</body>
+</html>

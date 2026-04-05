@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attack Path Graph</title>
+  <style>
+    :root {
+      --bg: #07111b;
+      --panel: rgba(10, 19, 31, 0.92);
+      --panel-soft: rgba(255,255,255,0.04);
+      --line: rgba(125,164,201,0.16);
+      --text: #eef5ff;
+      --muted: #93a7c1;
+      --source: #f59e0b;
+      --sink: #ef4444;
+      --cycle: #8b5cf6;
+      --critical: #fb923c;
+      --safe: #22c55e;
+      --cve: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: "Trebuchet MS", "Segoe UI", sans-serif; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(249,115,22,0.16), transparent 24%),
+        radial-gradient(circle at 82% 10%, rgba(94,234,212,0.10), transparent 18%),
+        linear-gradient(rgba(125,164,201,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(125,164,201,0.05) 1px, transparent 1px);
+      background-size: auto, auto, 34px 34px, 34px 34px;
+      pointer-events: none;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 320px minmax(640px, 1fr) 310px;
+      grid-template-rows: auto auto 1fr;
+      gap: 16px;
+      padding: 18px;
+      min-height: 100vh;
+    }
+    .panel {
+      background: linear-gradient(180deg, rgba(13,24,39,0.98), var(--panel));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.32);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .hero { grid-column: 1 / span 2; padding: 20px 22px; }
+    .summary { grid-column: 3; padding: 18px; }
+    .controls { grid-column: 1; grid-row: 2 / span 2; padding: 18px; }
+    .graph-panel { grid-column: 2; grid-row: 2 / span 2; padding: 14px; }
+    .inspector { grid-column: 3; grid-row: 2; padding: 18px; }
+    .critical { grid-column: 3; grid-row: 3; padding: 18px; align-self: start; }
+    .eyebrow, .label {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .eyebrow { color: var(--source); letter-spacing: 0.2em; font-size: 11px; }
+    h1, h2 { margin: 0; font-family: "Palatino Linotype", Georgia, serif; }
+    h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.05; max-width: 14ch; }
+    h2 { font-size: 22px; }
+    p { margin: 10px 0 0; color: var(--muted); line-height: 1.55; font-size: 14px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(94,234,212,0.3);
+      background: rgba(12,34,28,0.54);
+      color: #8ff1dc;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 16px currentColor;
+    }
+    .status[data-tone="warn"] {
+      border-color: rgba(245,158,11,0.28);
+      background: rgba(58,38,9,0.56);
+      color: #fbbf24;
+    }
+    .stats { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .stat, .focus, .legend, .select-wrap, .selected-card, .critical-item {
+      padding: 13px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(125,164,201,0.12);
+      background: var(--panel-soft);
+    }
+    .stat span { display: block; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+    .stat strong { display: block; margin-top: 7px; font-size: 24px; line-height: 1.1; }
+    .stat small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .buttons, .legend-grid, .critical-list { display: grid; gap: 10px; margin-top: 14px; }
+    .filter-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(125,164,201,0.16);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .filter-btn.active { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.14); }
+    .filter-btn:hover { border-color: rgba(245,158,11,0.4); }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .swatch { width: 16px; height: 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); flex: 0 0 16px; }
+    .swatch.source { background: var(--source); }
+    .swatch.sink { background: var(--sink); }
+    .swatch.critical { background: var(--critical); }
+    .swatch.cycle { background: var(--cycle); }
+    .swatch.safe { background: var(--safe); }
+    .swatch.cve { background: transparent; border: 2px solid var(--cve); box-shadow: 0 0 0 3px rgba(251,113,133,0.12); }
+    .select-wrap label { display: block; margin-bottom: 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(125,164,201,0.18);
+      background: rgba(5,12,22,0.85);
+      color: var(--text);
+      font: inherit;
+    }
+    .graph-header { display: flex; justify-content: space-between; gap: 12px; padding: 4px 8px 14px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; justify-content: flex-end; }
+    .badge {
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(125,164,201,0.12);
+      color: var(--text);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .graph-shell {
+      min-height: 760px;
+      border-radius: 22px;
+      border: 1px solid rgba(125,164,201,0.14);
+      background:
+        radial-gradient(circle at 24% 18%, rgba(249,115,22,0.08), transparent 24%),
+        radial-gradient(circle at 84% 12%, rgba(94,234,212,0.08), transparent 18%),
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+      overflow: hidden;
+    }
+    svg { width: 100%; height: 100%; min-height: 760px; display: block; }
+    .lane { fill: rgba(10,27,43,0.55); stroke: rgba(125,164,201,0.12); stroke-width: 1; }
+    .lane-label { fill: rgba(238,245,255,0.92); font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .lane-subtitle { fill: rgba(147,167,193,0.84); font-size: 10px; letter-spacing: 0.04em; }
+    .edge { fill: none; stroke: rgba(147,167,193,0.27); stroke-width: 1.4px; transition: opacity 0.16s ease, stroke-width 0.16s ease; }
+    .edge.cve { stroke: var(--cve); }
+    .edge-label { fill: #ffd2dd; font-size: 10px; paint-order: stroke; stroke: rgba(7,17,27,0.96); stroke-width: 4px; pointer-events: none; }
+    .node { cursor: pointer; transition: opacity 0.16s ease; }
+    .node-core { stroke: rgba(255,255,255,0.2); stroke-width: 1.5px; transition: stroke-width 0.16s ease, r 0.16s ease; }
+    .node-core.tone-source { fill: var(--source); }
+    .node-core.tone-sink { fill: var(--sink); }
+    .node-core.tone-cycle { fill: var(--cycle); }
+    .node-core.tone-critical { fill: var(--critical); }
+    .node-core.tone-safe { fill: var(--safe); }
+    .node-ring { fill: none; stroke: rgba(251,113,133,0.92); stroke-width: 2px; opacity: 0; }
+    .node-ring.vuln { opacity: 1; animation: pulse 2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+    .node-label { fill: var(--text); font-size: 12px; font-weight: 700; paint-order: stroke; stroke: rgba(7,17,27,0.98); stroke-width: 4px; pointer-events: none; }
+    .node-type { fill: rgba(147,167,193,0.86); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; paint-order: stroke; stroke: rgba(7,17,27,0.98); stroke-width: 4px; pointer-events: none; }
+    .selected-card dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 9px 12px; font-size: 13px; }
+    .selected-card dt { color: var(--muted); }
+    .selected-card dd { margin: 0; text-align: right; }
+    .critical-item strong { display: block; font-size: 14px; line-height: 1.35; }
+    .critical-item small { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .tooltip {
+      position: fixed;
+      min-width: 220px;
+      max-width: 280px;
+      padding: 13px 15px;
+      border-radius: 18px;
+      border: 1px solid rgba(245,158,11,0.26);
+      background: linear-gradient(180deg, rgba(13,24,39,0.98), rgba(7,17,27,0.96));
+      box-shadow: 0 18px 50px rgba(0,0,0,0.42);
+      font-size: 13px;
+      line-height: 1.45;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .tooltip[hidden] { display: none; }
+    .tooltip h3 { margin: 0 0 8px; font-size: 16px; }
+    .tooltip dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; }
+    .tooltip dt { color: var(--muted); }
+    .tooltip dd { margin: 0; text-align: right; }
+    .tooltip .cves { margin-top: 10px; color: #ffd2dd; font-size: 12px; }
+    @keyframes pulse {
+      0% { stroke-width: 2px; stroke-opacity: 0.92; }
+      50% { stroke-width: 8px; stroke-opacity: 0.08; }
+      100% { stroke-width: 2px; stroke-opacity: 0.92; }
+    }
+    @media (max-width: 1320px) {
+      .app { grid-template-columns: 300px minmax(0,1fr); grid-template-rows: auto auto auto auto auto; }
+      .hero, .summary { grid-column: 1 / span 2; }
+      .controls { grid-column: 1; grid-row: 3; }
+      .graph-panel { grid-column: 2; grid-row: 3 / span 2; }
+      .inspector { grid-column: 1; grid-row: 4; }
+      .critical { grid-column: 1; grid-row: 5; }
+    }
+    @media (max-width: 960px) {
+      .app { display: block; padding: 14px; }
+      .panel { margin-bottom: 14px; }
+      .graph-shell, svg { min-height: 640px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="panel hero">
+      <p class="eyebrow">Judge-Ready Attack Graph</p>
+      <h1>Cluster attack paths, without demo roulette.</h1>
+      <p>Self-contained graph surface for <strong>__CLUSTER_NAME__</strong>. It renders from the current dataset, highlights the shortest routes, shows blast radius and CVE exposure, and keeps working without a network call to fetch frontend libraries.</p>
+      <div class="status" data-tone="__ENGINE_TONE__">__ENGINE_TEXT__</div>
+    </section>
+    <section class="panel summary">
+      <p class="label">Rubric Snapshot</p>
+      <div class="stats" id="stats"></div>
+    </section>
+    <section class="panel controls">
+      <div>
+        <p class="label">Scope</p>
+        <h2>Graph Filters</h2>
+        <p>Switch between the entire cluster, the lowest-cost routes, the three-hop blast radius, and explicitly CVE-tagged traversals.</p>
+        <div class="buttons" id="filterButtons"></div>
+      </div>
+      <div class="focus" id="focusCopy"></div>
+      <div class="select-wrap">
+        <label for="nodeSelect">Focus Node</label>
+        <select id="nodeSelect"><option value="">Select a node</option></select>
+      </div>
+      <div class="legend">
+        <p class="label">Legend</p>
+        <div class="legend-grid">
+          <div class="legend-item"><span class="swatch source"></span>Attack source</div>
+          <div class="legend-item"><span class="swatch sink"></span>High-value sink</div>
+          <div class="legend-item"><span class="swatch critical"></span>Top critical choke point</div>
+          <div class="legend-item"><span class="swatch cycle"></span>Cycle participant</div>
+          <div class="legend-item"><span class="swatch safe"></span>Support node</div>
+          <div class="legend-item"><span class="swatch cve"></span>Node or edge with CVE context</div>
+        </div>
+      </div>
+    </section>
+    <section class="panel graph-panel">
+      <div class="graph-header">
+        <div>
+          <p class="label">Current Dataset</p>
+          <h2>Attack Path Map</h2>
+          <p id="graphCopy"></p>
+        </div>
+        <div class="badges" id="graphBadges"></div>
+      </div>
+      <div class="graph-shell">
+        <svg id="graphSvg" viewBox="0 0 1580 920" aria-label="Attack path graph">
+          <defs>
+            <marker id="arrow" viewBox="0 -5 10 10" refX="22" refY="0" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M0,-4L10,0L0,4" fill="rgba(147,167,193,0.58)"></path>
+            </marker>
+            <marker id="arrow-cve" viewBox="0 -5 10 10" refX="22" refY="0" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M0,-4L10,0L0,4" fill="#fb7185"></path>
+            </marker>
+          </defs>
+          <g id="laneLayer"></g>
+          <g id="edgeLayer"></g>
+          <g id="edgeLabelLayer"></g>
+          <g id="nodeLayer"></g>
+        </svg>
+      </div>
+    </section>
+    <section class="panel inspector">
+      <p class="label">Inspector</p>
+      <h2 id="selectedTitle">No node selected</h2>
+      <p id="selectedCopy">Click any node to isolate its visible inbound and outbound relationships.</p>
+      <div class="selected-card" id="selectedCard"></div>
+    </section>
+    <section class="panel critical">
+      <p class="label">Top Choke Points</p>
+      <h2>Critical Nodes</h2>
+      <p>Removing or re-scoping these nodes collapses the largest number of source-to-sink attack paths in the mock cluster.</p>
+      <div class="critical-list" id="criticalList"></div>
+    </section>
+  </div>
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script>
+    const DATA = __PAYLOAD_JSON__;
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.getElementById("graphSvg");
+    const laneLayer = document.getElementById("laneLayer");
+    const edgeLayer = document.getElementById("edgeLayer");
+    const edgeLabelLayer = document.getElementById("edgeLabelLayer");
+    const nodeLayer = document.getElementById("nodeLayer");
+    const statsEl = document.getElementById("stats");
+    const focusEl = document.getElementById("focusCopy");
+    const graphCopyEl = document.getElementById("graphCopy");
+    const graphBadgesEl = document.getElementById("graphBadges");
+    const filterButtonsEl = document.getElementById("filterButtons");
+    const selectedTitleEl = document.getElementById("selectedTitle");
+    const selectedCopyEl = document.getElementById("selectedCopy");
+    const selectedCardEl = document.getElementById("selectedCard");
+    const criticalListEl = document.getElementById("criticalList");
+    const tooltipEl = document.getElementById("tooltip");
+    const nodeSelectEl = document.getElementById("nodeSelect");
+    const nodes = DATA.graph.nodes.map((node) => ({ ...node }));
+    const edges = DATA.graph.edges.map((edge) => ({ ...edge }));
+    const filters = Object.fromEntries(Object.entries(DATA.filters).map(([key, value]) => [key, { ...value, nodes: new Set(value.nodes), edges: new Set(value.edges) }]));
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+    function createSvg(tag, attrs = {}, parent = null) {
+      const el = document.createElementNS(NS, tag);
+      for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+      if (parent) parent.appendChild(el);
+      return el;
+    }
+    function addText(parent, attrs, lines) {
+      const text = createSvg("text", attrs, parent);
+      lines.forEach((line, index) => {
+        const tspan = createSvg("tspan", { x: attrs.x, dy: index === 0 ? 0 : 13 }, text);
+        tspan.textContent = line;
+      });
+      return text;
+    }
+    function esc(value) {
+      return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+    }
+    function radius(node) {
+      if (node.is_sink) return 12.5;
+      if (node.is_source) return 11.5;
+      if (node.tone === "critical" || node.tone === "cycle") return 10.5;
+      return 9.5;
+    }
+    function curveOffset(edge) {
+      return edge.bidirectional ? (edge.source < edge.target ? 28 : -28) : 0;
+    }
+    function edgePath(edge) {
+      const source = nodeById.get(edge.source);
+      const target = nodeById.get(edge.target);
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const bend = curveOffset(edge);
+      const sx = source.x + (dx / dist) * radius(source);
+      const sy = source.y + (dy / dist) * radius(source);
+      const tx = target.x - (dx / dist) * (radius(target) + 12);
+      const ty = target.y - (dy / dist) * (radius(target) + 12);
+      if (!bend) return `M${sx},${sy} L${tx},${ty}`;
+      const mx = (sx + tx) / 2;
+      const my = (sy + ty) / 2;
+      const nx = (-dy / dist) * bend;
+      const ny = (dx / dist) * bend;
+      return `M${sx},${sy} Q${mx + nx},${my + ny} ${tx},${ty}`;
+    }
+    function edgeLabelPosition(edge) {
+      const source = nodeById.get(edge.source);
+      const target = nodeById.get(edge.target);
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const bend = curveOffset(edge);
+      const mx = (source.x + target.x) / 2;
+      const my = (source.y + target.y) / 2;
+      if (!bend) return [mx, my - 7];
+      return [mx + (-dy / dist) * bend * 0.55, my + (dx / dist) * bend * 0.55 - 8];
+    }
+    function renderLanes() {
+      for (const lane of DATA.graph.lanes) {
+        createSvg("rect", { class: "lane", x: lane.x, y: lane.y, rx: 22, ry: 22, width: lane.width, height: lane.height }, laneLayer);
+        createSvg("text", { class: "lane-label", x: lane.x + 18, y: lane.y + 26 }, laneLayer).textContent = lane.label;
+        createSvg("text", { class: "lane-subtitle", x: lane.x + 18, y: lane.y + 42 }, laneLayer).textContent = lane.subtitle;
+      }
+    }
+    function renderEdges() {
+      for (const edge of edges) {
+        edge.pathEl = createSvg("path", { class: `edge${edge.cve ? " cve" : ""}`, d: edgePath(edge), "marker-end": `url(#${edge.cve ? "arrow-cve" : "arrow"})` }, edgeLayer);
+        if (edge.cve) {
+          const [x, y] = edgeLabelPosition(edge);
+          edge.labelEl = createSvg("text", { class: "edge-label", x, y }, edgeLabelLayer);
+          edge.labelEl.textContent = edge.cvss ? `${edge.cve} | CVSS ${Number(edge.cvss).toFixed(1)}` : edge.cve;
+        }
+      }
+    }
+    function renderNodes() {
+      for (const node of nodes) {
+        const group = createSvg("g", { class: "node" }, nodeLayer);
+        node.groupEl = group;
+        node.coreEl = createSvg("circle", { class: `node-core tone-${node.tone}`, cx: node.x, cy: node.y, r: radius(node) }, group);
+        createSvg("circle", { class: `node-ring${node.has_cves ? " vuln" : ""}`, cx: node.x, cy: node.y, r: radius(node) + 5 }, group);
+        addText(group, { class: "node-label", x: node.x + 15, y: node.y - 2 }, [node.name]);
+        addText(group, { class: "node-type", x: node.x + 15, y: node.y + 12 }, [node.type]);
+        group.addEventListener("mouseenter", (event) => showTooltip(event, node));
+        group.addEventListener("mousemove", moveTooltip);
+        group.addEventListener("mouseleave", hideTooltip);
+        group.addEventListener("click", (event) => { event.stopPropagation(); toggleSelection(node.id); });
+      }
+    }
+    function renderStats() {
+      statsEl.innerHTML = DATA.stats.map((stat) => `<div class="stat"><span>${esc(stat.label)}</span><strong>${esc(stat.value)}</strong><small>${esc(stat.detail)}</small></div>`).join("");
+    }
+    function renderBadges() {
+      graphBadgesEl.innerHTML = DATA.badges.map((badge) => `<span class="badge">${esc(badge)}</span>`).join("");
+      graphCopyEl.textContent = DATA.graph_copy;
+    }
+    function renderFilters() {
+      filterButtonsEl.innerHTML = "";
+      for (const [key, filter] of Object.entries(DATA.filters)) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "filter-btn";
+        button.dataset.filter = key;
+        button.innerHTML = `<strong>${esc(filter.label)}</strong><br><span style="color: var(--muted); font-size: 12px;">${esc(filter.subtitle)}</span>`;
+        button.addEventListener("click", () => setFilter(key));
+        filterButtonsEl.appendChild(button);
+      }
+    }
+    function renderNodeOptions() {
+      [...nodes].sort((left, right) => left.name.localeCompare(right.name)).forEach((node) => {
+        const option = document.createElement("option");
+        option.value = node.id;
+        option.textContent = `${node.name} (${node.id})`;
+        nodeSelectEl.appendChild(option);
+      });
+      nodeSelectEl.addEventListener("change", () => { selectedId = nodeSelectEl.value || null; renderSelection(); paint(); });
+    }
+    function renderCriticalList() {
+      criticalListEl.innerHTML = DATA.critical_nodes.map((node, index) => `<div class="critical-item"><strong>${index + 1}. ${esc(node.display)}</strong><small>${esc(node.node_type)} | removes ${esc(node.paths_eliminated)} source-to-sink paths</small></div>`).join("");
+    }
+    function showTooltip(event, node) {
+      tooltipEl.hidden = false;
+      tooltipEl.innerHTML = `<h3>${esc(node.name)}</h3><dl><dt>ID</dt><dd>${esc(node.id)}</dd><dt>Type</dt><dd>${esc(node.type)}</dd><dt>Namespace</dt><dd>${esc(node.namespace)}</dd><dt>Risk</dt><dd>${Number(node.risk_score).toFixed(1)}</dd><dt>Outgoing</dt><dd>${node.out_degree}</dd><dt>Incoming</dt><dd>${node.in_degree}</dd></dl><div class="cves"><strong>CVEs:</strong> ${node.cves.length ? esc(node.cves.join(", ")) : "None"}</div>`;
+      moveTooltip(event);
+    }
+    function moveTooltip(event) {
+      tooltipEl.style.left = `${Math.min(event.clientX + 18, window.innerWidth - 300)}px`;
+      tooltipEl.style.top = `${Math.min(event.clientY + 18, window.innerHeight - 180)}px`;
+    }
+    function hideTooltip() { tooltipEl.hidden = true; }
+    function visibleNodeIds() { return filters[currentFilter].nodes; }
+    function visibleEdgeKeys() { return filters[currentFilter].edges; }
+    function selectionNeighborhood() {
+      const result = { nodes: new Set(), edges: new Set() };
+      if (!selectedId) return result;
+      for (const edge of edges) {
+        if (!visibleEdgeKeys().has(edge.key)) continue;
+        if (edge.source === selectedId || edge.target === selectedId) {
+          result.nodes.add(edge.source);
+          result.nodes.add(edge.target);
+          result.edges.add(edge.key);
+        }
+      }
+      return result;
+    }
+    function renderSelection() {
+      if (!selectedId) {
+        selectedTitleEl.textContent = "No node selected";
+        selectedCopyEl.textContent = "Click any node to isolate its visible inbound and outbound relationships.";
+        selectedCardEl.innerHTML = `<dl><dt>Cluster</dt><dd>${esc(DATA.cluster_name)}</dd><dt>Data Source</dt><dd>${esc(DATA.data_source_label)}</dd><dt>Attack Paths</dt><dd>${DATA.attack_path_count}</dd><dt>Critical Node</dt><dd>${esc(DATA.critical_recommendation.display)}</dd></dl>`;
+        nodeSelectEl.value = "";
+        return;
+      }
+      const node = nodeById.get(selectedId);
+      const neighbors = new Set();
+      for (const edge of edges) {
+        if (!visibleEdgeKeys().has(edge.key)) continue;
+        if (edge.source === selectedId) neighbors.add(edge.target);
+        if (edge.target === selectedId) neighbors.add(edge.source);
+      }
+      selectedTitleEl.textContent = node.name;
+      selectedCopyEl.textContent = node.summary;
+      selectedCardEl.innerHTML = `<dl><dt>ID</dt><dd>${esc(node.id)}</dd><dt>Type</dt><dd>${esc(node.type)}</dd><dt>Namespace</dt><dd>${esc(node.namespace)}</dd><dt>Risk Score</dt><dd>${Number(node.risk_score).toFixed(1)}</dd><dt>Direct Neighbors</dt><dd>${neighbors.size}</dd><dt>Outgoing</dt><dd>${node.out_degree}</dd><dt>Incoming</dt><dd>${node.in_degree}</dd><dt>CVEs</dt><dd>${node.cves.length ? esc(node.cves.join(", ")) : "None"}</dd></dl>`;
+      nodeSelectEl.value = selectedId;
+    }
+    function paint() {
+      const visibleNodes = visibleNodeIds();
+      const visibleEdges = visibleEdgeKeys();
+      const hood = selectionNeighborhood();
+      focusEl.textContent = filters[currentFilter].description;
+      document.querySelectorAll(".filter-btn").forEach((button) => button.classList.toggle("active", button.dataset.filter === currentFilter));
+      for (const edge of edges) {
+        const visible = visibleEdges.has(edge.key);
+        const emphasized = !selectedId || hood.edges.has(edge.key);
+        edge.pathEl.style.opacity = !visible ? 0.04 : emphasized ? (edge.cve ? 0.98 : 0.6) : 0.08;
+        edge.pathEl.style.strokeWidth = selectedId && hood.edges.has(edge.key) ? (edge.cve ? 3.5 : 2.8) : (edge.cve ? 2.2 : 1.4);
+        if (edge.labelEl) edge.labelEl.style.opacity = !visible ? 0 : emphasized ? 0.98 : 0.06;
+      }
+      for (const node of nodes) {
+        const visible = visibleNodes.has(node.id);
+        const emphasized = !selectedId || node.id === selectedId || hood.nodes.has(node.id);
+        node.groupEl.style.opacity = !visible ? 0.06 : emphasized ? 1 : 0.18;
+        node.groupEl.style.pointerEvents = visible ? "auto" : "none";
+        node.coreEl.setAttribute("stroke-width", selectedId === node.id ? "3.1" : "1.5");
+        node.coreEl.setAttribute("r", String(selectedId === node.id ? radius(node) + 2.4 : radius(node)));
+      }
+    }
+    function toggleSelection(nodeId) {
+      selectedId = selectedId === nodeId ? null : nodeId;
+      renderSelection();
+      paint();
+    }
+    function setFilter(filterId) {
+      currentFilter = filterId;
+      if (selectedId && !visibleNodeIds().has(selectedId)) selectedId = null;
+      renderSelection();
+      paint();
+    }
+    let currentFilter = DATA.default_filter;
+    let selectedId = null;
+    renderLanes();
+    renderEdges();
+    renderNodes();
+    renderStats();
+    renderBadges();
+    renderFilters();
+    renderNodeOptions();
+    renderCriticalList();
+    renderSelection();
+    paint();
+    svg.addEventListener("click", () => { selectedId = null; renderSelection(); paint(); });
+  </script>
+</body>
+</html>
